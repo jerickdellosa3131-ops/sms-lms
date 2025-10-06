@@ -1,0 +1,1 @@
+SELECT * FROM sms3_lms.quizzes;
