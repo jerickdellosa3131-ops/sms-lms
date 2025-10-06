@@ -1,15 +1,51 @@
+<?php
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+
+$user = Auth::user();
+$student = null;
+$enrollments = collect();
+
+if ($user) {
+    // Get student details
+    $student = DB::table('students')
+        ->where('user_id', $user->user_id)
+        ->first();
+    
+    // Get enrollments with class info
+    if ($student) {
+        $enrollments = DB::table('class_enrollments')
+            ->join('classes', 'class_enrollments.class_id', '=', 'classes.class_id')
+            ->leftJoin('subjects', 'classes.subject_id', '=', 'subjects.subject_id')
+            ->where('class_enrollments.student_id', $student->student_id)
+            ->where('class_enrollments.status', 'enrolled')
+            ->select('classes.*', 'subjects.subject_name')
+            ->get();
+    }
+}
+
+$fullName = $user ? $user->first_name . ' ' . $user->last_name : 'N/A';
+$studentId = $student->student_number ?? 'N/A';
+$course = $student->program ?? 'N/A';
+$yearLevel = $student->year_level ?? 'N/A';
+$email = $user->email ?? 'N/A';
+?>
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="<?php echo csrf_token(); ?>">
   <title>SMS3</title>
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="../../style.css?v=1.1">
-
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <style>
     @import url("../../style.css");
 
@@ -63,9 +99,9 @@
     <div class="col-md-4 text-center">
       <div class="card shadow-sm border-0">
         <div class="card-body">
-          <img src="../assets/profile-placeholder.png" class="rounded-circle mb-3" width="150" height="150" alt="Profile Picture">
-          <h5 class="fw-bold">Joan De Guzman</h5>
-          <p class="text-muted">BS Information Technology</p>
+          <img src="<?php echo asset('assets/profile-placeholder.png'); ?>" class="rounded-circle mb-3" width="150" height="150" alt="Profile Picture">
+          <h5 class="fw-bold"><?php echo htmlspecialchars($fullName); ?></h5>
+          <p class="text-muted"><?php echo htmlspecialchars($course); ?></p>
           <button class="btn btn-outline-primary btn-sm">
             <i class="bi bi-upload me-1"></i> Change Photo
           </button>
@@ -81,33 +117,33 @@
           <div class="row mb-3">
             <div class="col-md-6">
               <label class="form-label fw-bold">Full Name</label>
-              <input type="text" class="form-control" value="John Doe" readonly>
+              <input type="text" class="form-control" value="<?php echo htmlspecialchars($fullName); ?>" readonly>
             </div>
             <div class="col-md-6">
               <label class="form-label fw-bold">Student ID</label>
-              <input type="text" class="form-control" value="s2025-1235" readonly>
+              <input type="text" class="form-control" value="<?php echo htmlspecialchars($studentId); ?>" readonly>
             </div>
           </div>
 
           <div class="row mb-3">
             <div class="col-md-6">
               <label class="form-label fw-bold">Email</label>
-              <input type="email" class="form-control" value="johndoe@email.com" readonly>
+              <input type="email" class="form-control" value="<?php echo htmlspecialchars($email); ?>" readonly>
             </div>
             <div class="col-md-6">
               <label class="form-label fw-bold">Course</label>
-              <input type="text" class="form-control" value="BS Computer Science" readonly>
+              <input type="text" class="form-control" value="<?php echo htmlspecialchars($course); ?>" readonly>
             </div>
           </div>
 
           <div class="row mb-3">
             <div class="col-md-6">
               <label class="form-label fw-bold">Year Level</label>
-              <input type="text" class="form-control" value="3rd Year" readonly>
+              <input type="text" class="form-control" value="<?php echo htmlspecialchars($yearLevel); ?>" readonly>
             </div>
             <div class="col-md-6">
-              <label class="form-label fw-bold">Section</label>
-              <input type="text" class="form-control" value="Section A" readonly>
+              <label class="form-label fw-bold">Enrolled Classes</label>
+              <input type="text" class="form-control" value="<?php echo $enrollments->count(); ?> Classes" readonly>
             </div>
           </div>
 

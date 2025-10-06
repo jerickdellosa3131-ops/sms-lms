@@ -172,6 +172,124 @@ Route::prefix('admin')->middleware(['auth'])->name('admin.')->group(function () 
         }
     })->name('users.store');
     
+    // Create Quiz (AJAX)
+    Route::post('/quizzes/store', function (Request $request) {
+        if (!Auth::user()->isAdmin()) abort(403);
+        
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'section_id' => 'required|integer',
+                'duration' => 'nullable|integer',
+                'total_points' => 'nullable|integer',
+                'deadline' => 'nullable|date'
+            ]);
+            
+            $quizId = DB::table('quizzes')->insertGetId([
+                'quiz_title' => $request->title,
+                'section_id' => $request->section_id,
+                'duration_minutes' => $request->duration ?? 30,
+                'total_points' => $request->total_points ?? 100,
+                'deadline' => $request->deadline,
+                'created_by' => Auth::id(),
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Quiz created successfully',
+                'quiz_id' => $quizId
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create quiz: ' . $e->getMessage()
+            ], 500);
+        }
+    })->name('quizzes.store');
+    
+    // Create Assignment (AJAX)
+    Route::post('/assignments/store', function (Request $request) {
+        if (!Auth::user()->isAdmin()) abort(403);
+        
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'class_id' => 'required|integer',
+                'description' => 'nullable|string',
+                'due_date' => 'required|date',
+                'max_points' => 'nullable|integer'
+            ]);
+            
+            $assignmentId = DB::table('assignments')->insertGetId([
+                'title' => $request->title,
+                'class_id' => $request->class_id,
+                'description' => $request->description,
+                'due_date' => $request->due_date,
+                'max_points' => $request->max_points ?? 100,
+                'created_by' => Auth::id(),
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Assignment created successfully',
+                'assignment_id' => $assignmentId
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create assignment: ' . $e->getMessage()
+            ], 500);
+        }
+    })->name('assignments.store');
+    
+    // Upload Material (AJAX with file)
+    Route::post('/materials/upload', function (Request $request) {
+        if (!Auth::user()->isAdmin()) abort(403);
+        
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'class_id' => 'required|integer',
+                'material_type' => 'required|string',
+                'file' => 'nullable|file|max:10240' // 10MB max
+            ]);
+            
+            $filePath = null;
+            if ($request->hasFile('file')) {
+                $file = $request->file('file');
+                $fileName = time() . '_' . $file->getClientOriginalName();
+                $filePath = $file->storeAs('materials', $fileName, 'public');
+            }
+            
+            $materialId = DB::table('lesson_materials')->insertGetId([
+                'material_title' => $request->title,
+                'module_id' => $request->class_id,
+                'material_type' => $request->material_type,
+                'file_path' => $filePath,
+                'teacher_id' => Auth::id(),
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Material uploaded successfully',
+                'material_id' => $materialId
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to upload material: ' . $e->getMessage()
+            ], 500);
+        }
+    })->name('materials.upload');
+    
     // Class Portal
     Route::get('/class-portal', function () {
         if (!Auth::user()->isAdmin()) abort(403);
@@ -249,6 +367,56 @@ Route::prefix('admin')->middleware(['auth'])->name('admin.')->group(function () 
         return view('admin.VirtualClassLinkInteg.virtualclasslinkinteg');
     })->name('virtual-class');
     
+    // Create Virtual Class - POST route
+    Route::post('/virtual-class', function (Request $request) {
+        if (!Auth::user()->isAdmin()) abort(403);
+        
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'class_id' => 'required|integer',
+                'platform' => 'required|string',
+                'meeting_link' => 'required|url',
+                'scheduled_at' => 'required|date',
+                'duration' => 'nullable|integer'
+            ]);
+            
+            // Get teacher_id from users table
+            $teacher = DB::table('teachers')->where('user_id', Auth::id())->first();
+            
+            if (!$teacher) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Teacher record not found'
+                ], 400);
+            }
+            
+            $virtualClassId = DB::table('virtual_class_links')->insertGetId([
+                'class_id' => $request->class_id,
+                'teacher_id' => $teacher->teacher_id,
+                'meeting_title' => $request->title,
+                'meeting_platform' => strtolower(str_replace(' ', '_', $request->platform)),
+                'meeting_link' => $request->meeting_link,
+                'scheduled_date' => $request->scheduled_at,
+                'duration' => $request->duration ?? 60,
+                'status' => 'scheduled',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Virtual class created successfully',
+                'virtual_class_id' => $virtualClassId
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create virtual class: ' . $e->getMessage()
+            ], 500);
+        }
+    });
+    
     // Multimedia Support
     Route::get('/multimedia', function () {
         if (!Auth::user()->isAdmin()) abort(403);
@@ -270,6 +438,123 @@ Route::prefix('teacher')->middleware(['auth'])->name('teacher.')->group(function
         return view('teacher.Dashboard.dashboard');
     })->name('dashboard');
     
+    // Create Quiz (AJAX)
+    Route::post('/quizzes/store', function (Request $request) {
+        if (!Auth::user()->isTeacher()) abort(403);
+        
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'duration' => 'nullable|integer',
+                'total_points' => 'nullable|integer',
+                'deadline' => 'nullable|date'
+            ]);
+            
+            // Get teacher_id from teachers table
+            $teacher = DB::table('teachers')->where('user_id', Auth::id())->first();
+            
+            if (!$teacher) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Teacher record not found'
+                ], 400);
+            }
+            
+            // Get teacher's class
+            $teacherClass = DB::table('classes')
+                ->where('teacher_id', $teacher->teacher_id)
+                ->first();
+            
+            if (!$teacherClass) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No class found for this teacher'
+                ], 400);
+            }
+            
+            $quizId = DB::table('quizzes')->insertGetId([
+                'quiz_title' => $request->title,
+                'class_id' => $teacherClass->class_id,
+                'teacher_id' => $teacher->teacher_id,
+                'time_limit' => $request->duration ?? 30,
+                'total_points' => $request->total_points ?? 100,
+                'end_date' => $request->deadline,
+                'status' => 'published',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Quiz created successfully',
+                'quiz_id' => $quizId
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create quiz: ' . $e->getMessage()
+            ], 500);
+        }
+    })->name('quizzes.store');
+    
+    // Create Assignment (AJAX)
+    Route::post('/assignments/store', function (Request $request) {
+        if (!Auth::user()->isTeacher()) abort(403);
+        
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'due_date' => 'required|date',
+                'max_points' => 'nullable|integer'
+            ]);
+            
+            // Get teacher_id from teachers table
+            $teacher = DB::table('teachers')->where('user_id', Auth::id())->first();
+            
+            if (!$teacher) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Teacher record not found'
+                ], 400);
+            }
+            
+            $teacherClass = DB::table('classes')
+                ->where('teacher_id', $teacher->teacher_id)
+                ->first();
+            
+            if (!$teacherClass) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No class found for this teacher'
+                ], 400);
+            }
+            
+            $assignmentId = DB::table('assignments')->insertGetId([
+                'title' => $request->title,
+                'class_id' => $teacherClass->class_id,
+                'teacher_id' => $teacher->teacher_id,
+                'description' => $request->description,
+                'due_date' => $request->due_date,
+                'total_points' => $request->max_points ?? 100,
+                'status' => 'published',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Assignment created successfully',
+                'assignment_id' => $assignmentId
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create assignment: ' . $e->getMessage()
+            ], 500);
+        }
+    })->name('assignments.store');
+    
     // Class Portal
     Route::get('/class-portal', function () {
         if (!Auth::user()->isTeacher()) abort(403);
@@ -282,11 +567,175 @@ Route::prefix('teacher')->middleware(['auth'])->name('teacher.')->group(function
         return view('teacher.LessonMaterialUpload.lessonmaterialupload');
     })->name('lesson-materials');
     
+    // Upload Material - Alternative route for lesson-materials POST
+    Route::post('/lesson-materials', function (Request $request) {
+        if (!Auth::user()->isTeacher()) abort(403);
+        
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'material_type' => 'required|string',
+                'file' => 'nullable|file|max:10240' // 10MB max
+            ]);
+            
+            $filePath = null;
+            if ($request->hasFile('file')) {
+                $file = $request->file('file');
+                $fileName = time() . '_' . $file->getClientOriginalName();
+                $filePath = $file->storeAs('materials', $fileName, 'public');
+            }
+            
+            // Get teacher's class
+            $teacherClass = DB::table('classes')
+                ->where('teacher_id', Auth::id())
+                ->first();
+            
+            if (!$teacherClass) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No class found for this teacher'
+                ], 400);
+            }
+            
+            $materialId = DB::table('lesson_materials')->insertGetId([
+                'material_title' => $request->title,
+                'module_id' => $teacherClass->class_id,
+                'material_type' => $request->material_type,
+                'file_path' => $filePath,
+                'teacher_id' => Auth::id(),
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Material uploaded successfully',
+                'material_id' => $materialId
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to upload material: ' . $e->getMessage()
+            ], 500);
+        }
+    });
+    
+    // Upload Material (AJAX with file)
+    Route::post('/materials/upload', function (Request $request) {
+        if (!Auth::user()->isTeacher()) abort(403);
+        
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'material_type' => 'required|string',
+                'file' => 'nullable|file|max:10240' // 10MB max
+            ]);
+            
+            $filePath = null;
+            if ($request->hasFile('file')) {
+                $file = $request->file('file');
+                $fileName = time() . '_' . $file->getClientOriginalName();
+                $filePath = $file->storeAs('materials', $fileName, 'public');
+            }
+            
+            // Get teacher's class
+            $teacherClass = DB::table('classes')
+                ->where('teacher_id', Auth::id())
+                ->first();
+            
+            if (!$teacherClass) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No class found for this teacher'
+                ], 400);
+            }
+            
+            $materialId = DB::table('lesson_materials')->insertGetId([
+                'material_title' => $request->title,
+                'module_id' => $teacherClass->class_id,
+                'material_type' => $request->material_type,
+                'file_path' => $filePath,
+                'teacher_id' => Auth::id(),
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Material uploaded successfully',
+                'material_id' => $materialId
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to upload material: ' . $e->getMessage()
+            ], 500);
+        }
+    })->name('materials.upload');
+    
     // Assignments
     Route::get('/assignments', function () {
         if (!Auth::user()->isTeacher()) abort(403);
         return view('teacher.AssignmentSubmission.assignsubmission');
     })->name('assignments');
+    
+    // Create Assignment - POST route
+    Route::post('/assignments', function (Request $request) {
+        if (!Auth::user()->isTeacher()) abort(403);
+        
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'due_date' => 'required|date',
+                'max_points' => 'nullable|integer'
+            ]);
+            
+            // Get teacher_id from teachers table
+            $teacher = DB::table('teachers')->where('user_id', Auth::id())->first();
+            
+            if (!$teacher) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Teacher record not found'
+                ], 400);
+            }
+            
+            $teacherClass = DB::table('classes')
+                ->where('teacher_id', $teacher->teacher_id)
+                ->first();
+            
+            if (!$teacherClass) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No class found for this teacher'
+                ], 400);
+            }
+            
+            $assignmentId = DB::table('assignments')->insertGetId([
+                'title' => $request->title,
+                'class_id' => $teacherClass->class_id,
+                'teacher_id' => $teacher->teacher_id,
+                'description' => $request->description,
+                'due_date' => $request->due_date,
+                'total_points' => $request->max_points ?? 100,
+                'status' => 'published',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Assignment created successfully',
+                'assignment_id' => $assignmentId
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create assignment: ' . $e->getMessage()
+            ], 500);
+        }
+    });
     
     // Quizzes
     Route::get('/quizzes', function () {
@@ -294,11 +743,104 @@ Route::prefix('teacher')->middleware(['auth'])->name('teacher.')->group(function
         return view('teacher.OnlineQuizzes.onlinequizzes');
     })->name('quizzes');
     
+    // Create Quiz - Alternative POST route
+    Route::post('/quizzes', function (Request $request) {
+        if (!Auth::user()->isTeacher()) abort(403);
+        
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'duration' => 'nullable|integer',
+                'total_points' => 'nullable|integer',
+                'deadline' => 'nullable|date'
+            ]);
+            
+            // Get teacher_id from teachers table
+            $teacher = DB::table('teachers')->where('user_id', Auth::id())->first();
+            
+            if (!$teacher) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Teacher record not found'
+                ], 400);
+            }
+            
+            // Get teacher's class
+            $teacherClass = DB::table('classes')
+                ->where('teacher_id', $teacher->teacher_id)
+                ->first();
+            
+            if (!$teacherClass) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No class found for this teacher'
+                ], 400);
+            }
+            
+            $quizId = DB::table('quizzes')->insertGetId([
+                'quiz_title' => $request->title,
+                'class_id' => $teacherClass->class_id,
+                'teacher_id' => $teacher->teacher_id,
+                'time_limit' => $request->duration ?? 30,
+                'total_points' => $request->total_points ?? 100,
+                'end_date' => $request->deadline,
+                'status' => 'published',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Quiz created successfully',
+                'quiz_id' => $quizId
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create quiz: ' . $e->getMessage()
+            ], 500);
+        }
+    });
+    
     // Grading
     Route::get('/grading', function () {
         if (!Auth::user()->isTeacher()) abort(403);
         return view('teacher.GradingIntegration.gradinginteg');
     })->name('grading');
+    
+    // Grade Submission - POST route
+    Route::post('/grading', function (Request $request) {
+        if (!Auth::user()->isTeacher()) abort(403);
+        
+        try {
+            $validated = $request->validate([
+                'submission_id' => 'required|integer',
+                'score' => 'required|numeric|min:0|max:100',
+                'feedback' => 'nullable|string'
+            ]);
+            
+            DB::table('assignment_submissions')
+                ->where('submission_id', $request->submission_id)
+                ->update([
+                    'score' => $request->score,
+                    'feedback' => $request->feedback,
+                    'status' => 'graded',
+                    'graded_at' => now(),
+                    'graded_by' => Auth::id(),
+                    'updated_at' => now()
+                ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Assignment graded successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to grade assignment: ' . $e->getMessage()
+            ], 500);
+        }
+    });
     
     // Analytics
     Route::get('/analytics', function () {
@@ -311,6 +853,66 @@ Route::prefix('teacher')->middleware(['auth'])->name('teacher.')->group(function
         if (!Auth::user()->isTeacher()) abort(403);
         return view('teacher.VirtualClassLinkInteg.virtualclasslinkinteg');
     })->name('virtual-classes');
+    
+    // Create Virtual Class - POST route
+    Route::post('/virtual-classes', function (Request $request) {
+        if (!Auth::user()->isTeacher()) abort(403);
+        
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'platform' => 'required|string',
+                'meeting_link' => 'required|url',
+                'scheduled_at' => 'required|date',
+                'duration' => 'nullable|integer'
+            ]);
+            
+            $teacherClass = DB::table('classes')
+                ->where('teacher_id', Auth::id())
+                ->first();
+            
+            if (!$teacherClass) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No class found for this teacher'
+                ], 400);
+            }
+            
+            // Get teacher_id from users table
+            $teacher = DB::table('teachers')->where('user_id', Auth::id())->first();
+            
+            if (!$teacher) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Teacher record not found'
+                ], 400);
+            }
+            
+            $virtualClassId = DB::table('virtual_class_links')->insertGetId([
+                'class_id' => $teacherClass->class_id,
+                'teacher_id' => $teacher->teacher_id,
+                'meeting_title' => $request->title,
+                'meeting_platform' => strtolower(str_replace(' ', '_', $request->platform)),
+                'meeting_link' => $request->meeting_link,
+                'scheduled_date' => $request->scheduled_at,
+                'duration' => $request->duration ?? 60,
+                'status' => 'scheduled',
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Virtual class created successfully',
+                'virtual_class_id' => $virtualClassId
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create virtual class: ' . $e->getMessage()
+            ], 500);
+        }
+    });
     
     // Module Tracking
     Route::get('/module-tracking', function () {

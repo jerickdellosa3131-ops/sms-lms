@@ -5,28 +5,29 @@ use Illuminate\Support\Facades\DB;
 // Get authenticated user
 $user = Auth::user();
 
-// Fetch virtual classes with teacher and class information (handle missing table)
+// Fetch virtual classes with teacher and class information
 try {
-    $virtualClasses = DB::table('virtual_classes')
-        ->join('users as teachers', 'virtual_classes.teacher_id', '=', 'teachers.user_id')
-        ->join('classes', 'virtual_classes.class_id', '=', 'classes.class_id')
+    $virtualClasses = DB::table('virtual_class_links')
+        ->join('teachers', 'virtual_class_links.teacher_id', '=', 'teachers.teacher_id')
+        ->join('users', 'teachers.user_id', '=', 'users.user_id')
+        ->join('classes', 'virtual_class_links.class_id', '=', 'classes.class_id')
         ->select(
-            'virtual_classes.*',
-            'teachers.first_name as teacher_first',
-            'teachers.last_name as teacher_last',
+            'virtual_class_links.*',
+            'users.first_name as teacher_first',
+            'users.last_name as teacher_last',
             'classes.section_name',
             'classes.class_code'
         )
-        ->orderBy('virtual_classes.scheduled_at', 'desc')
+        ->orderBy('virtual_class_links.scheduled_date', 'desc')
         ->get();
 } catch (\Exception $e) {
-    // If virtual_classes table doesn't exist, create empty collection
+    // If table doesn't exist, create empty collection
     $virtualClasses = collect([]);
 }
 
 // Calculate statistics
 $totalScheduled = $virtualClasses->count();
-$activeClasses = $virtualClasses->where('status', 'active')->count();
+$activeClasses = $virtualClasses->whereIn('status', ['scheduled', 'ongoing'])->count();
 $cancelledClasses = $virtualClasses->where('status', 'cancelled')->count();
 ?>
 <!DOCTYPE html>
@@ -35,6 +36,7 @@ $cancelledClasses = $virtualClasses->where('status', 'cancelled')->count();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?php echo csrf_token(); ?>">
     <title>SMS3</title>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
@@ -52,14 +54,25 @@ $cancelledClasses = $virtualClasses->where('status', 'cancelled')->count();
   <!-- SheetJS for Excel Export -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
   
+  <!-- Modal Handlers Library -->
+  <script src="<?php echo asset('js/modal-handlers.js'); ?>"></script>
+  
   <!-- Admin Actions Library -->
   <script src="<?php echo asset('js/admin-actions.js'); ?>"></script>
   
-    <style>
-        @import url("../../style.css");
+  <style>
+    @import url("../../style.css");
+  </style>
+</head>
 
-        /* Make sidebar scrollable in landscape mode on mobile devices */
-                    <div class="d-flex justify-content-between align-items-center mb-4">
+<body>
+  <?php include resource_path('views/includes/sidenav_admin.php'); ?>
+  
+  <div class="main-content flex-grow-1">
+    <div class="container my-5">
+      <div class="card shadow-lg border-0 rounded-4">
+        <div class="card-body p-4">
+          <div class="d-flex justify-content-between align-items-center mb-4">
                         <div class="d-flex align-items-center">
                             <i class="bi bi-camera-video-fill text-danger fs-1 me-3"></i>
                             <h3 class="mb-0 fw-bold">Virtual Class Link Management</h3>
@@ -121,22 +134,33 @@ $cancelledClasses = $virtualClasses->where('status', 'cancelled')->count();
                                 <?php if($virtualClasses->count() > 0): ?>
                                     <?php foreach($virtualClasses as $vc): 
                                         $teacherName = $vc->teacher_first . ' ' . $vc->teacher_last;
-                                        $statusBadge = match($vc->status) {
-                                            'active' => 'bg-success',
-                                            'pending' => 'bg-warning text-dark',
-                                            'cancelled' => 'bg-danger',
-                                            'completed' => 'bg-secondary',
-                                            default => 'bg-info'
-                                        };
+                                        
+                                        // Determine status badge color
+                                        switch($vc->status) {
+                                            case 'ongoing':
+                                                $statusBadge = 'bg-success';
+                                                break;
+                                            case 'scheduled':
+                                                $statusBadge = 'bg-primary';
+                                                break;
+                                            case 'cancelled':
+                                                $statusBadge = 'bg-danger';
+                                                break;
+                                            case 'completed':
+                                                $statusBadge = 'bg-secondary';
+                                                break;
+                                            default:
+                                                $statusBadge = 'bg-info';
+                                        }
                                     ?>
                                     <tr>
                                         <td>
-                                            <strong><?php echo htmlspecialchars($vc->title ?? $vc->section_name); ?></strong><br>
+                                            <strong><?php echo htmlspecialchars($vc->meeting_title ?? $vc->section_name); ?></strong><br>
                                             <small class="text-muted"><?php echo htmlspecialchars($vc->class_code); ?></small>
                                         </td>
                                         <td><?php echo htmlspecialchars($teacherName); ?></td>
-                                        <td><?php echo htmlspecialchars($vc->platform ?? 'N/A'); ?></td>
-                                        <td><?php echo date('M d, Y g:i A', strtotime($vc->scheduled_at)); ?></td>
+                                        <td><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $vc->meeting_platform ?? 'N/A'))); ?></td>
+                                        <td><?php echo date('M d, Y g:i A', strtotime($vc->scheduled_date)); ?></td>
                                         <td>
                                             <?php if($vc->meeting_link): ?>
                                                 <a href="<?php echo htmlspecialchars($vc->meeting_link); ?>" target="_blank" class="btn btn-sm btn-outline-info">
@@ -151,13 +175,28 @@ $cancelledClasses = $virtualClasses->where('status', 'cancelled')->count();
                                         </td>
                                         <td><span class="badge <?php echo $statusBadge; ?>"><?php echo ucfirst($vc->status); ?></span></td>
                                         <td>
-                                            <button class="btn btn-sm btn-outline-info me-1" title="View">
+                                            <button class="btn btn-sm btn-outline-info me-1" title="View"
+                                                onclick="viewRecord(<?php echo $vc->virtual_class_id; ?>, 'Virtual Class', {
+                                                    'Title': '<?php echo addslashes($vc->meeting_title ?? $vc->section_name); ?>',
+                                                    'Teacher': '<?php echo addslashes($teacherName); ?>',
+                                                    'Platform': '<?php echo addslashes($vc->meeting_platform ?? 'N/A'); ?>',
+                                                    'Schedule': '<?php echo date('M d, Y g:i A', strtotime($vc->scheduled_date)); ?>',
+                                                    'Link': '<?php echo addslashes($vc->meeting_link ?? 'N/A'); ?>',
+                                                    'Status': '<?php echo ucfirst($vc->status); ?>'
+                                                })">
                                                 <i class="bi bi-eye"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-warning me-1" title="Edit">
+                                            <button class="btn btn-sm btn-outline-warning me-1" title="Edit"
+                                                onclick="editRecord(<?php echo $vc->virtual_class_id; ?>, 'Virtual Class', {
+                                                    'title': '<?php echo addslashes($vc->meeting_title ?? ''); ?>',
+                                                    'platform': '<?php echo addslashes($vc->meeting_platform ?? ''); ?>',
+                                                    'link': '<?php echo addslashes($vc->meeting_link ?? ''); ?>',
+                                                    'schedule': '<?php echo $vc->scheduled_date; ?>'
+                                                })">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
-                                            <button class="btn btn-sm btn-outline-danger" title="Delete">
+                                            <button class="btn btn-sm btn-outline-danger" title="Delete"
+                                                onclick="deleteRecord(<?php echo $vc->virtual_class_id; ?>, 'Virtual Class', '<?php echo addslashes($vc->meeting_title ?? $vc->section_name); ?>')">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </td>
@@ -184,8 +223,10 @@ $cancelledClasses = $virtualClasses->where('status', 'cancelled')->count();
   
 
 
-    </style>
-</body>
+        </div>
+      </div>
+    </div>
+  </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
@@ -229,4 +270,5 @@ $cancelledClasses = $virtualClasses->where('status', 'cancelled')->count();
   }
 </script>
 
+</body>
 </html>

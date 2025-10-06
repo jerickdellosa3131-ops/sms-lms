@@ -234,15 +234,285 @@ function quickCreateQuiz() {
 // Handle Quick Quiz Creation
 function handleQuickQuizCreate() {
   const title = document.getElementById('quizTitle').value;
+  const duration = document.getElementById('quizDuration')?.value || 30;
+  const points = document.getElementById('quizPoints')?.value || 100;
+  const dueDate = document.getElementById('quizDueDate')?.value;
   
   if (!title) {
-    alert('Please enter a quiz title');
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        icon: 'error',
+        title: 'Missing Title',
+        text: 'Please enter a quiz title'
+      });
+    } else {
+      alert('Please enter a quiz title');
+    }
     return;
   }
-  
-  alert('Quiz "' + title + '" created successfully! You can now add questions.');
-  bootstrap.Modal.getInstance(document.getElementById('quickQuizModal')).hide();
-  showNotification('Quiz created successfully!', 'success');
+
+  // Show loading
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({
+      title: 'Creating Quiz...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+  }
+
+  // Get CSRF token
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+  // Send AJAX request
+  fetch('/teacher/quizzes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': csrfToken,
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      title,
+      duration,
+      total_points: points,
+      deadline: dueDate
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          icon: 'success',
+          title: 'Quiz Created!',
+          text: 'Your quiz has been created successfully',
+          showConfirmButton: true
+        }).then(() => {
+          const modalElement = document.getElementById('quickQuizModal');
+          if (modalElement) {
+            bootstrap.Modal.getInstance(modalElement)?.hide();
+          }
+          // Reset form if it exists
+          const form = document.getElementById('createQuizForm');
+          if (form) {
+            form.reset();
+          }
+          location.reload();
+        });
+      } else {
+        alert('Quiz created successfully!');
+        bootstrap.Modal.getInstance(document.getElementById('quickQuizModal'))?.hide();
+        location.reload();
+      }
+    } else {
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: data.message
+        });
+      } else {
+        alert('Error: ' + data.message);
+      }
+    }
+  })
+  .catch(error => {
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to create quiz. Please try again.'
+      });
+    } else {
+      alert('Failed to create quiz. Please try again.');
+    }
+    console.error('Error:', error);
+  });
+}
+
+// Handle Create Assignment
+function handleCreateAssignment() {
+  const title = document.getElementById('assignmentTitle')?.value;
+  const deadline = document.getElementById('deadline')?.value;
+  const description = document.getElementById('assignmentDesc')?.value;
+
+  if (!title || !deadline) {
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        icon: 'error',
+        title: 'Missing Fields',
+        text: 'Please fill in title and deadline'
+      });
+    } else {
+      alert('Please fill in title and deadline');
+    }
+    return;
+  }
+
+  // Show loading
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({
+      title: 'Creating Assignment...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+  }
+
+  // Get CSRF token
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+  // Send AJAX request
+  fetch('/teacher/assignments', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': csrfToken,
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      title,
+      description,
+      due_date: deadline,
+      max_points: 100
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          icon: 'success',
+          title: 'Assignment Created!',
+          text: data.message,
+          showConfirmButton: true
+        }).then(() => {
+          const form = document.getElementById('createAssignmentForm');
+          if (form) {
+            form.reset();
+          }
+          location.reload();
+        });
+      } else {
+        alert('Assignment created successfully!');
+        document.getElementById('createAssignmentForm')?.reset();
+        location.reload();
+      }
+    } else {
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: data.message
+        });
+      } else {
+        alert('Error: ' + data.message);
+      }
+    }
+  })
+  .catch(error => {
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to create assignment. Please try again.'
+      });
+    } else {
+      alert('Failed to create assignment. Please try again.');
+    }
+    console.error('Error:', error);
+  });
+}
+
+// Handle Create Virtual Class
+function handleCreateVirtualClass() {
+  const title = document.getElementById('classTitle')?.value;
+  const platform = document.getElementById('platform')?.value;
+  const link = document.getElementById('classLink')?.value;
+  const schedule = document.getElementById('classSchedule')?.value;
+
+  if (!title || !platform || !link || !schedule) {
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        icon: 'error',
+        title: 'Missing Fields',
+        text: 'Please fill in all required fields'
+      });
+    } else {
+      alert('Please fill in all required fields');
+    }
+    return;
+  }
+
+  // Show loading
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({
+      title: 'Creating Virtual Class...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+  }
+
+  // Get CSRF token
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+  // Send AJAX request
+  fetch('/teacher/virtual-classes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': csrfToken,
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      title,
+      platform,
+      meeting_link: link,
+      scheduled_at: schedule,
+      duration: 60
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          icon: 'success',
+          title: 'Virtual Class Created!',
+          text: data.message,
+          showConfirmButton: true
+        }).then(() => {
+          document.getElementById('virtualClassForm').reset();
+          location.reload();
+        });
+      } else {
+        alert('Virtual class created successfully!');
+        document.getElementById('virtualClassForm').reset();
+        location.reload();
+      }
+    } else {
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: data.message
+        });
+      } else {
+        alert('Error: ' + data.message);
+      }
+    }
+  })
+  .catch(error => {
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to create virtual class. Please try again.'
+      });
+    } else {
+      alert('Failed to create virtual class. Please try again.');
+    }
+    console.error('Error:', error);
+  });
 }
 
 // View/Edit/Delete from admin-actions.js (reuse)

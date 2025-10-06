@@ -3,9 +3,17 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 $user = Auth::user();
-$student_id = $user ? $user->user_id : null;
+$user_id = $user ? $user->user_id : null;
 
-if ($student_id) {
+// Get the actual student_id from students table
+$student = null;
+if ($user_id) {
+    $student = DB::table('students')->where('user_id', $user_id)->first();
+}
+
+if ($student) {
+    $student_id = $student->student_id;
+    
     // Fetch available quizzes for enrolled classes
     $quizzes = DB::table('quizzes')
         ->join('classes', 'quizzes.class_id', '=', 'classes.class_id')
@@ -50,6 +58,7 @@ if ($student_id) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="<?php echo csrf_token(); ?>">
   <title>SMS3</title>
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">

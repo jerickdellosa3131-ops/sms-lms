@@ -1,9 +1,47 @@
+<?php
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+
+$user = Auth::user();
+$student_id = $user ? $user->user_id : null;
+
+if ($student_id) {
+    // Get student details
+    $student = DB::table('students')->where('user_id', $student_id)->first();
+    
+    // Fetch grades for performance metrics
+    $grades = DB::table('grades')
+        ->join('classes', 'grades.class_id', '=', 'classes.class_id')
+        ->where('grades.student_id', $student_id)
+        ->select('grades.*', 'classes.section_name')
+        ->orderBy('grades.graded_at', 'desc')
+        ->get();
+    
+    // Calculate performance stats
+    $avgGrade = $grades->avg('percentage') ?? 0;
+    $totalAssignments = DB::table('assignment_submissions')
+        ->where('student_id', $student_id)
+        ->count();
+    $completedQuizzes = DB::table('quiz_attempts')
+        ->where('student_id', $student_id)
+        ->where('status', 'completed')
+        ->count();
+} else {
+    $student = null;
+    $grades = collect();
+    $avgGrade = 0;
+    $totalAssignments = 0;
+    $completedQuizzes = 0;
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="<?php echo csrf_token(); ?>">
+  <title>SMS3</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="<?php echo asset('style.css'); ?>">
 

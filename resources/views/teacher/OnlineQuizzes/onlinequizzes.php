@@ -5,12 +5,20 @@ use Illuminate\Support\Facades\DB;
 $user = Auth::user();
 $teacher_id = $user ? $user->user_id : null;
 
+// Get teacher's teacher_id from teachers table
+$teacher = null;
+$quizzes = collect();
+$recentAttempts = collect();
+
 if ($teacher_id) {
-    // Fetch quizzes created by this teacher
-    $quizzes = DB::table('quizzes')
-        ->join('classes', 'quizzes.class_id', '=', 'classes.class_id')
-        ->leftJoin('quiz_attempts', 'quizzes.quiz_id', '=', 'quiz_attempts.quiz_id')
-        ->where('quizzes.teacher_id', $teacher_id)
+    $teacher = DB::table('teachers')->where('user_id', $teacher_id)->first();
+    
+    if ($teacher) {
+        // Fetch quizzes created by this teacher
+        $quizzes = DB::table('quizzes')
+            ->join('classes', 'quizzes.class_id', '=', 'classes.class_id')
+            ->leftJoin('quiz_attempts', 'quizzes.quiz_id', '=', 'quiz_attempts.quiz_id')
+            ->where('quizzes.teacher_id', $teacher->teacher_id)
         ->select(
             'quizzes.*',
             'classes.section_name',
@@ -22,24 +30,22 @@ if ($teacher_id) {
         ->orderBy('quizzes.created_at', 'desc')
         ->get();
     
-    // Fetch recent quiz attempts for student performance
-    $recentAttempts = DB::table('quiz_attempts')
-        ->join('quizzes', 'quiz_attempts.quiz_id', '=', 'quizzes.quiz_id')
-        ->join('users', 'quiz_attempts.student_id', '=', 'users.user_id')
-        ->where('quizzes.teacher_id', $teacher_id)
-        ->select(
-            'quiz_attempts.*',
-            'quizzes.quiz_title',
-            'quizzes.total_points',
-            'users.first_name',
-            'users.last_name'
-        )
-        ->orderBy('quiz_attempts.end_time', 'desc')
-        ->limit(10)
-        ->get();
-} else {
-    $quizzes = collect();
-    $recentAttempts = collect();
+        // Fetch recent quiz attempts for student performance
+        $recentAttempts = DB::table('quiz_attempts')
+            ->join('quizzes', 'quiz_attempts.quiz_id', '=', 'quizzes.quiz_id')
+            ->join('users', 'quiz_attempts.student_id', '=', 'users.user_id')
+            ->where('quizzes.teacher_id', $teacher->teacher_id)
+            ->select(
+                'quiz_attempts.*',
+                'quizzes.quiz_title',
+                'quizzes.total_points',
+                'users.first_name',
+                'users.last_name'
+            )
+            ->orderBy('quiz_attempts.end_time', 'desc')
+            ->limit(10)
+            ->get();
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -48,6 +54,7 @@ if ($teacher_id) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="<?php echo csrf_token(); ?>">
   <title>SMS3</title>
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
@@ -56,8 +63,15 @@ if ($teacher_id) {
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   
+  <!-- SweetAlert2 for Alerts -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
   <!-- SheetJS for Excel Export -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+  
+  <!-- Modal Handlers Library -->
+  <script src="<?php echo asset('js/modal-handlers.js'); ?>"></script>
   
   <!-- Teacher Actions Library -->
   <script src="<?php echo asset('teacher-actions.js'); ?>"></script>
@@ -109,7 +123,7 @@ if ($teacher_id) {
 
         <!-- Create Quiz -->
         <h5 class="fw-bold mb-3">Create New Quiz</h5>
-        <form action="#" method="post" class="mb-5">
+        <form id="createQuizForm" onsubmit="event.preventDefault(); handleQuickQuizCreate();" class="mb-5">
           <div class="row g-3">
             <!-- Quiz Title -->
             <div class="col-md-6">

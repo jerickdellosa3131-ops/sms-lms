@@ -347,9 +347,29 @@ $documentCount = $mediaFiles->filter(function($m) {
       }
     }
     
-    alert('Media "' + title + '" uploaded successfully! (Demo mode)');
-    bootstrap.Modal.getInstance(document.getElementById('uploadMediaModal')).hide();
-    document.getElementById('uploadMediaForm').reset();
+    Swal.fire({ title: 'Uploading Media...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    fetch('/admin/materials/upload', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+      },
+      body: JSON.stringify({ title, material_type: 'other' })
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) {
+        Swal.fire('Success!', 'Media uploaded successfully!', 'success').then(() => {
+          bootstrap.Modal.getInstance(document.getElementById('uploadMediaModal')).hide();
+          document.getElementById('uploadMediaForm').reset();
+          location.reload();
+        });
+      } else {
+        Swal.fire('Error', d.message, 'error');
+      }
+    })
+    .catch(() => Swal.fire('Error', 'Failed to upload media', 'error'));
   }
 
   // Export media list to Excel

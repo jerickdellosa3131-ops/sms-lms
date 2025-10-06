@@ -4,10 +4,18 @@ use Illuminate\Support\Facades\DB;
 
 // Get logged in user
 $user = Auth::user();
-$student_id = $user ? $user->user_id : null;
+$user_id = $user ? $user->user_id : null;
 
-// Only fetch data if user is logged in
-if ($student_id) {
+// Get the actual student_id from students table
+$student = null;
+if ($user_id) {
+    $student = DB::table('students')->where('user_id', $user_id)->first();
+}
+
+// Only fetch data if student record exists
+if ($student) {
+    $student_id = $student->student_id;
+    
     // Fetch enrolled classes
     $enrolledClasses = DB::table('class_enrollments')
         ->join('classes', 'class_enrollments.class_id', '=', 'classes.class_id')
@@ -45,21 +53,19 @@ if ($student_id) {
 } else {
     // Default empty collections if not logged in
     $enrolledClasses = collect();
-    $upcomingAssignments = collect();
     $recentGrades = collect();
 }
 ?>
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="<?php echo csrf_token(); ?>">
   <title>SMS3</title>
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="<?php echo asset('style.css'); ?>">
-
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
   <style>

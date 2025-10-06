@@ -29,6 +29,7 @@ if ($teacher_id) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="<?php echo csrf_token(); ?>">
   <title>SMS3</title>
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
@@ -36,6 +37,13 @@ if ($teacher_id) {
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  
+  <!-- SweetAlert2 for Alerts -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <!-- Modal Handlers Library -->
+  <script src="<?php echo asset('js/modal-handlers.js'); ?>"></script>
   
   <!-- Teacher Actions Library -->
   <script src="<?php echo asset('teacher-actions.js'); ?>"></script>
@@ -79,7 +87,7 @@ if ($teacher_id) {
         </div>
 
         <!-- Upload Form -->
-        <form action="#" method="post" enctype="multipart/form-data">
+        <form id="uploadMaterialForm" onsubmit="event.preventDefault(); handleTeacherUploadMaterial();" enctype="multipart/form-data">
           <div class="row g-3">
             
             <!-- Select Class -->
@@ -95,8 +103,8 @@ if ($teacher_id) {
 
             <!-- Lesson Title -->
             <div class="col-md-6">
-              <label for="lessonTitle" class="form-label fw-bold">Lesson Title</label>
-              <input type="text" class="form-control" id="lessonTitle" placeholder="Enter lesson title" required>
+              <label for="materialTitle" class="form-label fw-bold">Lesson Title</label>
+              <input type="text" class="form-control" id="materialTitle" placeholder="Enter lesson title" required>
             </div>
 
             <!-- Description -->
@@ -107,8 +115,8 @@ if ($teacher_id) {
 
             <!-- Upload File -->
             <div class="col-md-6">
-              <label for="uploadFile" class="form-label fw-bold">Upload File</label>
-              <input class="form-control" type="file" id="uploadFile" multiple required>
+              <label for="materialFile" class="form-label fw-bold">Upload File</label>
+              <input class="form-control" type="file" id="materialFile" required>
               <small class="text-muted">Accepted: PDF, PPT, DOCX, MP4</small>
             </div>
 
@@ -117,9 +125,11 @@ if ($teacher_id) {
               <label for="materialType" class="form-label fw-bold">Material Type</label>
               <select class="form-select" id="materialType" required>
                 <option value="" selected disabled>-- Choose Type --</option>
-                <option value="lecture">Lecture Notes</option>
-                <option value="slides">Slides</option>
+                <option value="pdf">PDF Document</option>
+                <option value="doc">Word Document</option>
                 <option value="video">Video</option>
+                <option value="link">External Link</option>
+                <option value="image">Image</option>
                 <option value="other">Other</option>
               </select>
             </div>

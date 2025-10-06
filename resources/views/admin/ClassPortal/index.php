@@ -30,6 +30,7 @@ $totalEnrollments = $classes->sum('enrolled_count');
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?php echo csrf_token(); ?>">
     <title>SMS3</title>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
@@ -702,16 +703,35 @@ $totalEnrollments = $classes->sum('enrolled_count');
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+      // Get CSRF Token
+      function getCSRFToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      }
+
       // Handle Upload Material
       function handleUploadMaterial() {
         const title = document.getElementById('materialTitle').value;
         if (!title) {
-          alert('Please fill in required fields');
+          Swal.fire('Error', 'Please fill in required fields', 'error');
           return;
         }
-        alert('Material "' + title + '" uploaded successfully! (Demo mode - database integration needed)');
-        bootstrap.Modal.getInstance(document.getElementById('uploadMaterialsModal')).hide();
-        document.getElementById('uploadMaterialsForm').reset();
+        
+        Swal.fire({ title: 'Uploading...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        
+        fetch('/admin/materials/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCSRFToken() },
+          body: JSON.stringify({ title })
+        })
+        .then(r => r.json())
+        .then(d => {
+          if (d.success) {
+            Swal.fire('Success!', d.message, 'success').then(() => location.reload());
+          } else {
+            Swal.fire('Error', d.message, 'error');
+          }
+        })
+        .catch(() => Swal.fire('Error', 'Failed to upload material', 'error'));
       }
 
       // Handle Virtual Class Setup
@@ -719,49 +739,107 @@ $totalEnrollments = $classes->sum('enrolled_count');
         const title = document.getElementById('meetingTitle').value;
         const link = document.getElementById('meetingLink').value;
         if (!title || !link) {
-          alert('Please fill in required fields');
+          Swal.fire('Error', 'Please fill in required fields', 'error');
           return;
         }
-        alert('Virtual class "' + title + '" set up successfully! (Demo mode)');
-        bootstrap.Modal.getInstance(document.getElementById('virtualClassModal')).hide();
-        document.getElementById('virtualClassForm').reset();
+        
+        Swal.fire({ title: 'Creating...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        
+        fetch('/admin/virtual-class', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCSRFToken() },
+          body: JSON.stringify({ title, meeting_link: link, platform: 'other', scheduled_at: new Date().toISOString(), class_id: 1 })
+        })
+        .then(r => r.json())
+        .then(d => {
+          if (d.success) {
+            Swal.fire('Success!', d.message, 'success').then(() => location.reload());
+          } else {
+            Swal.fire('Error', d.message, 'error');
+          }
+        })
+        .catch(() => Swal.fire('Error', 'Failed to create virtual class', 'error'));
       }
 
       // Handle Create Quiz
       function handleCreateQuiz() {
         const title = document.getElementById('quizTitle').value;
         if (!title) {
-          alert('Please fill in required fields');
+          Swal.fire('Error', 'Please fill in required fields', 'error');
           return;
         }
-        alert('Quiz "' + title + '" created successfully! (Demo mode)');
-        bootstrap.Modal.getInstance(document.getElementById('createQuizModal')).hide();
-        document.getElementById('createQuizForm').reset();
+        
+        Swal.fire({ title: 'Creating Quiz...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        
+        fetch('/admin/quizzes/store', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCSRFToken() },
+          body: JSON.stringify({ title, duration: 30, total_points: 100 })
+        })
+        .then(r => r.json())
+        .then(d => {
+          if (d.success) {
+            Swal.fire('Success!', d.message, 'success').then(() => location.reload());
+          } else {
+            Swal.fire('Error', d.message, 'error');
+          }
+        })
+        .catch(() => Swal.fire('Error', 'Failed to create quiz', 'error'));
       }
 
       // Handle Add Assignment
       function handleAddAssignment() {
         const title = document.getElementById('assignmentTitle').value;
         const dueDate = document.getElementById('assignmentDueDate').value;
+        const classId = document.getElementById('assignmentClassId')?.value || 1; // fallback to 1 if no dropdown
+        
         if (!title || !dueDate) {
-          alert('Please fill in required fields');
+          Swal.fire('Error', 'Please fill in required fields', 'error');
           return;
         }
-        alert('Assignment "' + title + '" created successfully! (Demo mode)');
-        bootstrap.Modal.getInstance(document.getElementById('addAssignmentModal')).hide();
-        document.getElementById('addAssignmentForm').reset();
+        
+        Swal.fire({ title: 'Creating Assignment...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        
+        fetch('/admin/assignments/store', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCSRFToken() },
+          body: JSON.stringify({ title, due_date: dueDate, max_points: 100, class_id: parseInt(classId) })
+        })
+        .then(r => r.json())
+        .then(d => {
+          if (d.success) {
+            Swal.fire('Success!', d.message, 'success').then(() => location.reload());
+          } else {
+            Swal.fire('Error', d.message, 'error');
+          }
+        })
+        .catch(() => Swal.fire('Error', 'Failed to create assignment', 'error'));
       }
 
       // Handle Add Multimedia
       function handleAddMultimedia() {
         const title = document.getElementById('mediaTitle').value;
         if (!title) {
-          alert('Please fill in required fields');
+          Swal.fire('Error', 'Please fill in required fields', 'error');
           return;
         }
-        alert('Media "' + title + '" added successfully! (Demo mode)');
-        bootstrap.Modal.getInstance(document.getElementById('addMultimediaModal')).hide();
-        document.getElementById('addMultimediaForm').reset();
+        
+        Swal.fire({ title: 'Adding Media...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        
+        fetch('/admin/materials/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': getCSRFToken() },
+          body: JSON.stringify({ title, material_type: 'other' })
+        })
+        .then(r => r.json())
+        .then(d => {
+          if (d.success) {
+            Swal.fire('Success!', d.message, 'success').then(() => location.reload());
+          } else {
+            Swal.fire('Error', d.message, 'error');
+          }
+        })
+        .catch(() => Swal.fire('Error', 'Failed to add media', 'error'));
       }
     </script>
 </body>

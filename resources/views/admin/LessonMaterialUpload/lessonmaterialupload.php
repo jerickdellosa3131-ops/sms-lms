@@ -29,8 +29,10 @@ $totalVideo = $materials->filter(function($m) {
 <!DOCTYPE html>
 <html lang="en">
 
+  <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="<?php echo csrf_token(); ?>">
   <title>SMS3</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="<?php echo asset('style.css'); ?>">
@@ -220,10 +222,17 @@ $totalVideo = $materials->filter(function($m) {
                 <label for="materialClass" class="form-label fw-bold">Class/Subject <span class="text-danger">*</span></label>
                 <select class="form-select" id="materialClass" required>
                   <option value="">Select Class</option>
-                  <option value="math-7">Mathematics - Grade 7</option>
-                  <option value="science-8">Science - Grade 8</option>
-                  <option value="english-9">English - Grade 9</option>
-                  <option value="history-10">History - Grade 10</option>
+                  <?php
+                  $allClasses = DB::table('classes')
+                    ->leftJoin('subjects', 'classes.subject_id', '=', 'subjects.subject_id')
+                    ->select('classes.class_id', 'classes.section_name', 'subjects.subject_name')
+                    ->get();
+                  foreach($allClasses as $cls) {
+                    echo '<option value="' . $cls->class_id . '">' . 
+                         htmlspecialchars($cls->subject_name ?? $cls->section_name) . ' - ' . 
+                         htmlspecialchars($cls->section_name) . '</option>';
+                  }
+                  ?>
                 </select>
               </div>
               <div class="col-md-6">
@@ -300,14 +309,32 @@ $totalVideo = $materials->filter(function($m) {
       const classVal = document.getElementById('materialClass').value;
       const file = document.getElementById('materialFile').files[0];
       
-      if (!title || !classVal || !file) {
-        alert('Please fill in all required fields and select a file');
+      if (!title || !classVal) {
+        Swal.fire('Error', 'Please fill in all required fields', 'error');
         return;
       }
       
-      alert('Material "' + title + '" uploaded successfully! Students will be notified. (Demo mode)');
-      bootstrap.Modal.getInstance(document.getElementById('uploadMaterialModal')).hide();
-      document.getElementById('uploadMaterialForm').reset();
+      Swal.fire({ title: 'Uploading...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      
+      const classId = parseInt(classVal);
+      
+      fetch('/admin/materials/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+        },
+        body: JSON.stringify({ title, class_id: classId, material_type: 'pdf' })
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          Swal.fire('Success!', 'Material uploaded! Students will be notified.', 'success').then(() => location.reload());
+        } else {
+          Swal.fire('Error', d.message, 'error');
+        }
+      })
+      .catch(() => Swal.fire('Error', 'Failed to upload material', 'error'));
     }
 
     // Export Materials to Excel

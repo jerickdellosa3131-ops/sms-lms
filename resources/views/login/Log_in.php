@@ -13,16 +13,14 @@
             overflow: hidden;
         }
 
-        /* Set the background image and apply blur effect to a pseudo-element */
+        /* Modern gradient background */
         .blurred-bg {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-image: url('BCP.jpg');
-            background-size: cover;
-            background-position: center;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             z-index: -1;
         }
 

@@ -25,37 +25,44 @@ $current_page = basename($_SERVER['PHP_SELF'], '.php');
         <nav class="sidenav-nav">
             <ul>
                 <li>
-                    <a href="<?php echo route('student.dashboard'); ?>">
+                    <a href="<?php echo route('student.dashboard'); ?>" class="<?php echo request()->routeIs('student.dashboard') ? 'active' : ''; ?>">
                         <i class="fa-solid fa-house"></i> Dashboard
                     </a>
                 </li>
 
                 <li class="nav-title">Learning</li>
                 <li>
-                    <a href="<?php echo route('student.class-portal'); ?>">
+                    <a href="<?php echo route('student.class-portal'); ?>" class="<?php echo request()->routeIs('student.class-portal') ? 'active' : ''; ?>">
                         <i class="fa-solid fa-book"></i> Class Portal
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo route('student.assignments'); ?>">
+                    <a href="<?php echo route('student.assignments'); ?>" class="<?php echo request()->routeIs('student.assignments') ? 'active' : ''; ?>">
                         <i class="fa-solid fa-file-upload"></i> Assignments
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo route('student.quizzes'); ?>">
+                    <a href="<?php echo route('student.quizzes'); ?>" class="<?php echo request()->routeIs('student.quizzes') ? 'active' : ''; ?>">
                         <i class="fa-solid fa-question-circle"></i> Quizzes
                     </a>
                 </li>
 
                 <li class="nav-title">Progress</li>
                 <li>
-                    <a href="<?php echo route('student.grades'); ?>">
+                    <a href="<?php echo route('student.grades'); ?>" class="<?php echo request()->routeIs('student.grades') ? 'active' : ''; ?>">
                         <i class="fa-solid fa-chart-line"></i> My Grades
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo route('student.performance'); ?>">
+                    <a href="<?php echo route('student.performance'); ?>" class="<?php echo request()->routeIs('student.performance') ? 'active' : ''; ?>">
                         <i class="fa-solid fa-award"></i> Performance
+                    </a>
+                </li>
+
+                <li class="nav-title">Account</li>
+                <li>
+                    <a href="<?php echo route('student.profile'); ?>" class="<?php echo request()->routeIs('student.profile') ? 'active' : ''; ?>">
+                        <i class="fa-solid fa-user"></i> My Profile
                     </a>
                 </li>
             </ul>

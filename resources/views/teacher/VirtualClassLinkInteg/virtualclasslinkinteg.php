@@ -1,9 +1,39 @@
+<?php
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+
+$user = Auth::user();
+$teacher_id = $user ? $user->user_id : null;
+
+// Fetch teacher's teacher_id from teachers table
+$teacher = null;
+$virtualClasses = collect();
+
+if ($teacher_id) {
+    $teacher = DB::table('teachers')->where('user_id', $teacher_id)->first();
+    
+    if ($teacher) {
+        // Fetch virtual classes for this teacher
+        $virtualClasses = DB::table('virtual_class_links')
+            ->leftJoin('classes', 'virtual_class_links.class_id', '=', 'classes.class_id')
+            ->where('virtual_class_links.teacher_id', $teacher->teacher_id)
+            ->select(
+                'virtual_class_links.*',
+                'classes.section_name',
+                'classes.class_code'
+            )
+            ->orderBy('virtual_class_links.scheduled_date', 'desc')
+            ->get();
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="<?php echo csrf_token(); ?>">
   <title>SMS3</title>
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
@@ -11,6 +41,16 @@
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  
+  <!-- SweetAlert2 for Alerts -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <!-- Modal Handlers Library -->
+  <script src="<?php echo asset('js/modal-handlers.js'); ?>"></script>
+  
+  <!-- Teacher Actions Library -->
+  <script src="<?php echo asset('teacher-actions.js'); ?>"></script>
   <style>
     @import url("../../style.css");
 
@@ -53,7 +93,7 @@
 
         <!-- Create Virtual Class -->
         <h5 class="fw-bold mb-3">Create Virtual Class</h5>
-        <form action="#" method="post" class="mb-5">
+        <form id="virtualClassForm" onsubmit="event.preventDefault(); handleCreateVirtualClass();" class="mb-5">
           <div class="row g-3">
             <!-- Class Title -->
             <div class="col-md-6">
@@ -107,33 +147,64 @@
                 <th>Platform</th>
                 <th>Schedule</th>
                 <th>Link</th>
-                <th>Attendance</th>
+                <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>Algebra Lecture</td>
-                <td>Zoom</td>
-                <td>2025-08-25 09:00 AM</td>
-                <td><a href="https://zoom.us/j/123456789" target="_blank" class="btn btn-sm btn-outline-info">Join</a></td>
-                <td><span class="badge bg-success">45/50</span></td>
-                <td>
-                  <a href="#" class="btn btn-sm btn-outline-warning"><i class="bi bi-pencil"></i></a>
-                  <a href="#" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></a>
-                </td>
-              </tr>
-              <tr>
-                <td>Science Review</td>
-                <td>Google Meet</td>
-                <td>2025-08-26 01:00 PM</td>
-                <td><a href="https://meet.google.com/xyz-abc" target="_blank" class="btn btn-sm btn-outline-info">Join</a></td>
-                <td><span class="badge bg-warning text-dark">Pending</span></td>
-                <td>
-                  <a href="#" class="btn btn-sm btn-outline-warning"><i class="bi bi-pencil"></i></a>
-                  <a href="#" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></a>
-                </td>
-              </tr>
+              <?php if($virtualClasses->count() > 0): ?>
+                <?php foreach($virtualClasses as $vc): ?>
+                  <?php
+                    $platformDisplay = ucwords(str_replace('_', ' ', $vc->meeting_platform));
+                    $statusBadge = match($vc->status) {
+                      'scheduled' => 'bg-primary',
+                      'ongoing' => 'bg-success',
+                      'completed' => 'bg-secondary',
+                      'cancelled' => 'bg-danger',
+                      default => 'bg-info'
+                    };
+                  ?>
+                  <tr>
+                    <td>
+                      <strong><?php echo htmlspecialchars($vc->meeting_title); ?></strong><br>
+                      <small class="text-muted"><?php echo htmlspecialchars($vc->section_name ?? 'N/A'); ?></small>
+                    </td>
+                    <td><?php echo htmlspecialchars($platformDisplay); ?></td>
+                    <td><?php echo date('Y-m-d h:i A', strtotime($vc->scheduled_date)); ?></td>
+                    <td>
+                      <a href="<?php echo htmlspecialchars($vc->meeting_link); ?>" target="_blank" class="btn btn-sm btn-outline-info">
+                        <i class="bi bi-box-arrow-up-right me-1"></i>Join
+                      </a>
+                    </td>
+                    <td>
+                      <span class="badge <?php echo $statusBadge; ?>">
+                        <?php echo ucfirst($vc->status); ?>
+                      </span>
+                    </td>
+                    <td>
+                      <button class="btn btn-sm btn-outline-warning" title="Edit"
+                        onclick="editRecord(<?php echo $vc->virtual_class_id; ?>, 'VirtualClass', {
+                          'title': '<?php echo addslashes($vc->meeting_title); ?>',
+                          'platform': '<?php echo $vc->meeting_platform; ?>',
+                          'meeting_link': '<?php echo addslashes($vc->meeting_link); ?>'
+                        })">
+                        <i class="bi bi-pencil"></i>
+                      </button>
+                      <button class="btn btn-sm btn-outline-danger" title="Delete"
+                        onclick="deleteRecord(<?php echo $vc->virtual_class_id; ?>, 'VirtualClass', '<?php echo addslashes($vc->meeting_title); ?>')">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                <?php endforeach; ?>
+              <?php else: ?>
+                <tr>
+                  <td colspan="6" class="text-center text-muted py-4">
+                    <i class="bi bi-camera-video fs-1 d-block mb-2"></i>
+                    No virtual classes scheduled yet. Create one above!
+                  </td>
+                </tr>
+              <?php endif; ?>
             </tbody>
           </table>
         </div>

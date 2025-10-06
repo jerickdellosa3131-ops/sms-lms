@@ -37,6 +37,7 @@ $pendingGrading = $totalSubmissions - $gradedSubmissions;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?php echo csrf_token(); ?>">
     <title>SMS3</title>
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
@@ -247,12 +248,20 @@ $pendingGrading = $totalSubmissions - $gradedSubmissions;
               </select>
             </div>
             <div class="col-md-6">
-              <label for="assignmentClass" class="form-label fw-bold">Class</label>
-              <select class="form-select" id="assignmentClass">
-                <option value="grade-7">Grade 7</option>
-                <option value="grade-8">Grade 8</option>
-                <option value="grade-9">Grade 9</option>
-                <option value="grade-10">Grade 10</option>
+              <label for="assignmentClass" class="form-label fw-bold">Class <span class="text-danger">*</span></label>
+              <select class="form-select" id="assignmentClass" required>
+                <option value="">Select Class</option>
+                <?php
+                $allClasses = DB::table('classes')
+                  ->leftJoin('subjects', 'classes.subject_id', '=', 'subjects.subject_id')
+                  ->select('classes.class_id', 'classes.section_name', 'subjects.subject_name')
+                  ->get();
+                foreach($allClasses as $cls) {
+                  echo '<option value="' . $cls->class_id . '">' . 
+                       htmlspecialchars($cls->subject_name ?? $cls->section_name) . ' - ' . 
+                       htmlspecialchars($cls->section_name) . '</option>';
+                }
+                ?>
               </select>
             </div>
           </div>
@@ -326,13 +335,32 @@ $pendingGrading = $totalSubmissions - $gradedSubmissions;
   function handleCreateAssignment() {
     const title = document.getElementById('assignmentTitle').value;
     const dueDate = document.getElementById('assignmentDueDate').value;
-    if (!title || !dueDate) {
-      alert('Please fill in all required fields');
+    const classId = document.getElementById('assignmentClass').value;
+    
+    if (!title || !dueDate || !classId) {
+      Swal.fire('Error', 'Please fill in all required fields', 'error');
       return;
     }
-    alert('Assignment "' + title + '" created successfully! Students will be notified. (Demo mode)');
-    bootstrap.Modal.getInstance(document.getElementById('createAssignmentModal')).hide();
-    document.getElementById('createAssignmentForm').reset();
+    
+    Swal.fire({ title: 'Creating Assignment...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    fetch('/admin/assignments/store', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+      },
+      body: JSON.stringify({ title, due_date: dueDate, max_points: 100, class_id: parseInt(classId) })
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) {
+        Swal.fire('Success!', 'Assignment created! Students will be notified.', 'success').then(() => location.reload());
+      } else {
+        Swal.fire('Error', d.message, 'error');
+      }
+    })
+    .catch(() => Swal.fire('Error', 'Failed to create assignment', 'error'));
   }
 
   // Export Assignments to Excel

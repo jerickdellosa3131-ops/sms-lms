@@ -44,7 +44,9 @@ $avgScore = $quizzes->where('total_attempts', '>', 0)->avg('average_score') ?? 0
 <html lang="en">
 
 <head>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="<?php echo csrf_token(); ?>">
   <title>SMS3</title>
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
@@ -351,12 +353,29 @@ $avgScore = $quizzes->where('total_attempts', '>', 0)->avg('average_score') ?? 0
   function handleCreateQuiz() {
     const title = document.getElementById('quizTitle').value;
     if (!title) {
-      alert('Please enter a quiz title');
+      Swal.fire('Error', 'Please enter a quiz title', 'error');
       return;
     }
-    alert('Quiz "' + title + '" created successfully! You can now add questions. (Demo mode)');
-    bootstrap.Modal.getInstance(document.getElementById('createQuizModal')).hide();
-    document.getElementById('createQuizForm').reset();
+    
+    Swal.fire({ title: 'Creating Quiz...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    
+    fetch('/admin/quizzes/store', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+      },
+      body: JSON.stringify({ title, duration: 30, total_points: 100 })
+    })
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) {
+        Swal.fire('Success!', 'Quiz created! You can now add questions.', 'success').then(() => location.reload());
+      } else {
+        Swal.fire('Error', d.message, 'error');
+      }
+    })
+    .catch(() => Swal.fire('Error', 'Failed to create quiz', 'error'));
   }
 
   // Export Quizzes to Excel
