@@ -225,7 +225,7 @@ CREATE TABLE `assignments` (
   CONSTRAINT `assignments_ibfk_1` FOREIGN KEY (`class_id`) REFERENCES `classes` (`class_id`) ON DELETE CASCADE,
   CONSTRAINT `assignments_ibfk_2` FOREIGN KEY (`module_id`) REFERENCES `modules` (`module_id`) ON DELETE SET NULL,
   CONSTRAINT `assignments_ibfk_3` FOREIGN KEY (`teacher_id`) REFERENCES `teachers` (`teacher_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -234,7 +234,7 @@ CREATE TABLE `assignments` (
 
 LOCK TABLES `assignments` WRITE;
 /*!40000 ALTER TABLE `assignments` DISABLE KEYS */;
-INSERT INTO `assignments` VALUES (1,1,1,1,'Assignment 1: Array Implementation','Implement basic array operations','Create a program that demonstrates array operations including insertion, deletion, and searching.',100.00,'2025-10-15 23:59:59',1,0.00,NULL,'published','2025-10-05 17:04:03','2025-10-05 17:04:03'),(2,1,2,1,'Assignment 2: Linked List','Create a linked list implementation','Implement a singly linked list with basic operations.',100.00,'2025-10-25 23:59:59',1,0.00,NULL,'published','2025-10-05 17:04:03','2025-10-05 17:04:03'),(3,2,4,2,'React Component Assignment','Build React components','Create reusable React components for a todo application.',100.00,'2025-10-20 23:59:59',1,0.00,NULL,'published','2025-10-05 17:04:03','2025-10-05 17:04:03');
+INSERT INTO `assignments` VALUES (1,1,1,1,'Assignment 1: Array Implementation','Implement basic array operations','Create a program that demonstrates array operations including insertion, deletion, and searching.',100.00,'2025-10-15 23:59:59',1,0.00,NULL,'published','2025-10-05 17:04:03','2025-10-05 17:04:03'),(2,1,2,1,'Assignment 2: Linked List','Create a linked list implementation','Implement a singly linked list with basic operations.',100.00,'2025-10-25 23:59:59',1,0.00,NULL,'published','2025-10-05 17:04:03','2025-10-05 17:04:03'),(3,2,4,2,'React Component Assignment','Build React components','Create reusable React components for a todo application.',100.00,'2025-10-20 23:59:59',1,0.00,NULL,'published','2025-10-05 17:04:03','2025-10-05 17:04:03'),(4,1,NULL,1,'dasd','dasdas',NULL,100.00,'2025-10-09 06:34:00',1,0.00,NULL,'published','2025-10-06 14:34:29','2025-10-06 14:34:29');
 /*!40000 ALTER TABLE `assignments` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -295,7 +295,7 @@ CREATE TABLE `class_enrollments` (
   KEY `student_id` (`student_id`),
   CONSTRAINT `class_enrollments_ibfk_1` FOREIGN KEY (`class_id`) REFERENCES `classes` (`class_id`) ON DELETE CASCADE,
   CONSTRAINT `class_enrollments_ibfk_2` FOREIGN KEY (`student_id`) REFERENCES `students` (`student_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -304,7 +304,7 @@ CREATE TABLE `class_enrollments` (
 
 LOCK TABLES `class_enrollments` WRITE;
 /*!40000 ALTER TABLE `class_enrollments` DISABLE KEYS */;
-INSERT INTO `class_enrollments` VALUES (1,1,1,'2025-08-15','enrolled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(2,1,2,'2025-08-15','enrolled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(3,2,1,'2025-08-15','enrolled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(4,2,2,'2025-08-15','enrolled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(5,3,3,'2025-08-15','enrolled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(6,4,4,'2025-08-15','enrolled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(7,5,5,'2025-08-15','enrolled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03');
+INSERT INTO `class_enrollments` VALUES (1,1,1,'2025-08-15','enrolled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(2,1,2,'2025-08-15','enrolled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(3,2,1,'2025-08-15','enrolled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(4,2,2,'2025-08-15','enrolled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(5,3,3,'2025-08-15','enrolled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(6,4,4,'2025-08-15','enrolled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(7,5,5,'2025-08-15','enrolled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(12,3,1,'2025-10-07','enrolled',NULL,'2025-10-06 23:24:25','2025-10-06 23:24:25'),(13,4,1,'2025-10-07','enrolled',NULL,'2025-10-06 23:24:25','2025-10-06 23:24:25'),(14,5,1,'2025-10-07','enrolled',NULL,'2025-10-06 23:24:25','2025-10-06 23:24:25');
 /*!40000 ALTER TABLE `class_enrollments` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -487,7 +487,7 @@ CREATE TABLE `lesson_materials` (
   KEY `teacher_id` (`teacher_id`),
   CONSTRAINT `lesson_materials_ibfk_1` FOREIGN KEY (`module_id`) REFERENCES `modules` (`module_id`) ON DELETE CASCADE,
   CONSTRAINT `lesson_materials_ibfk_2` FOREIGN KEY (`teacher_id`) REFERENCES `teachers` (`teacher_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -496,7 +496,7 @@ CREATE TABLE `lesson_materials` (
 
 LOCK TABLES `lesson_materials` WRITE;
 /*!40000 ALTER TABLE `lesson_materials` DISABLE KEYS */;
-INSERT INTO `lesson_materials` VALUES (1,1,1,'Data Structures Overview','Introduction slides','pdf',NULL,NULL,NULL,1,1,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(2,1,1,'Video Lecture: DS Basics','Video introduction to data structures','video',NULL,NULL,NULL,2,1,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(3,2,1,'Arrays Tutorial','Complete guide to arrays','pdf',NULL,NULL,NULL,1,1,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(4,4,2,'React Getting Started','React setup guide','pdf',NULL,NULL,NULL,1,1,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(5,6,1,'OOP Concepts','Object-oriented programming fundamentals','pdf',NULL,NULL,NULL,1,1,'2025-10-05 17:04:03','2025-10-05 17:04:03');
+INSERT INTO `lesson_materials` VALUES (1,1,1,'Data Structures Overview','Introduction slides','pdf',NULL,NULL,NULL,1,1,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(2,1,1,'Video Lecture: DS Basics','Video introduction to data structures','video',NULL,NULL,NULL,2,1,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(3,2,1,'Arrays Tutorial','Complete guide to arrays','pdf',NULL,NULL,NULL,1,1,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(4,4,2,'React Getting Started','React setup guide','pdf',NULL,NULL,NULL,1,1,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(5,6,1,'OOP Concepts','Object-oriented programming fundamentals','pdf',NULL,NULL,NULL,1,1,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(6,4,3,'asdas',NULL,'pdf','materials/1759787781_alhyzsa narrative.pdf',NULL,NULL,NULL,1,'2025-10-06 13:56:21','2025-10-06 13:56:21'),(7,1,1,'asdsa',NULL,'pdf',NULL,NULL,NULL,NULL,1,'2025-10-06 14:59:05','2025-10-06 14:59:05');
 /*!40000 ALTER TABLE `lesson_materials` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -866,7 +866,7 @@ CREATE TABLE `quizzes` (
   CONSTRAINT `quizzes_ibfk_1` FOREIGN KEY (`class_id`) REFERENCES `classes` (`class_id`) ON DELETE CASCADE,
   CONSTRAINT `quizzes_ibfk_2` FOREIGN KEY (`module_id`) REFERENCES `modules` (`module_id`) ON DELETE SET NULL,
   CONSTRAINT `quizzes_ibfk_3` FOREIGN KEY (`teacher_id`) REFERENCES `teachers` (`teacher_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -875,7 +875,7 @@ CREATE TABLE `quizzes` (
 
 LOCK TABLES `quizzes` WRITE;
 /*!40000 ALTER TABLE `quizzes` DISABLE KEYS */;
-INSERT INTO `quizzes` VALUES (1,1,1,1,'Quiz 1: Data Structures Basics','Test your knowledge of basic data structures',NULL,50.00,35.00,30,'2025-10-01 00:00:00','2025-10-08 23:59:59',2,0,0,'published','2025-10-05 17:04:03','2025-10-05 17:04:03'),(2,2,4,2,'React Fundamentals Quiz','Quiz on React basics',NULL,50.00,35.00,45,'2025-10-05 00:00:00','2025-10-12 23:59:59',2,0,0,'published','2025-10-05 17:04:03','2025-10-05 17:04:03');
+INSERT INTO `quizzes` VALUES (1,1,1,1,'Quiz 1: Data Structures Basics','Test your knowledge of basic data structures',NULL,50.00,35.00,30,'2025-10-01 00:00:00','2025-10-08 23:59:59',2,0,0,'published','2025-10-05 17:04:03','2025-10-05 17:04:03'),(2,2,4,2,'React Fundamentals Quiz','Quiz on React basics',NULL,50.00,35.00,45,'2025-10-05 00:00:00','2025-10-12 23:59:59',2,0,0,'published','2025-10-05 17:04:03','2025-10-05 17:04:03'),(3,1,NULL,1,'asdas',NULL,NULL,100.00,60.00,30,NULL,NULL,1,0,0,'published','2025-10-06 14:26:04','2025-10-06 14:26:04');
 /*!40000 ALTER TABLE `quizzes` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1214,7 +1214,7 @@ CREATE TABLE `virtual_class_links` (
   KEY `teacher_id` (`teacher_id`),
   CONSTRAINT `virtual_class_links_ibfk_1` FOREIGN KEY (`class_id`) REFERENCES `classes` (`class_id`) ON DELETE CASCADE,
   CONSTRAINT `virtual_class_links_ibfk_2` FOREIGN KEY (`teacher_id`) REFERENCES `teachers` (`teacher_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1223,7 +1223,7 @@ CREATE TABLE `virtual_class_links` (
 
 LOCK TABLES `virtual_class_links` WRITE;
 /*!40000 ALTER TABLE `virtual_class_links` DISABLE KEYS */;
-INSERT INTO `virtual_class_links` VALUES (1,1,1,'IT301 Week 5 Lecture','zoom','https://zoom.us/j/123456789','123456789','pass123','2025-10-08 08:00:00',90,'scheduled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(2,2,2,'IT302 React Workshop','google_meet','https://meet.google.com/abc-defg-hij',NULL,NULL,'2025-10-09 10:00:00',120,'scheduled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03');
+INSERT INTO `virtual_class_links` VALUES (1,1,1,'IT301 Week 5 Lecture','zoom','https://zoom.us/j/123456789','123456789','pass123','2025-10-08 08:00:00',90,'scheduled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(2,2,2,'IT302 React Workshop','google_meet','https://meet.google.com/abc-defg-hij',NULL,NULL,'2025-10-09 10:00:00',120,'scheduled',NULL,'2025-10-05 17:04:03','2025-10-05 17:04:03'),(3,4,1,'asdas','zoom','https://us06web.zoom.us/j/87408162655?pwd=b3XiI8zAbSzjihW6xJpCGbR8JbjUUS.1',NULL,NULL,'2025-10-10 06:16:00',60,'scheduled',NULL,'2025-10-06 14:16:46','2025-10-06 14:16:46');
 /*!40000 ALTER TABLE `virtual_class_links` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -1290,4 +1290,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-10-06 18:09:32
+-- Dump completed on 2025-10-07  7:38:50
