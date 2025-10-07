@@ -9,6 +9,8 @@ $teacher_id = $user ? $user->user_id : null;
 $teacher = null;
 $assignments = collect();
 $submissions = collect();
+$pendingCount = 0;
+$gradedCount = 0;
 
 if ($teacher_id) {
     $teacher = DB::table('teachers')->where('user_id', $teacher_id)->first();
@@ -26,20 +28,27 @@ if ($teacher_id) {
             ->orderBy('assignments.created_at', 'desc')
             ->get();
         
-        // Fetch student submissions
+        // Fetch student submissions with student details
         $submissions = DB::table('assignment_submissions')
             ->join('assignments', 'assignment_submissions.assignment_id', '=', 'assignments.assignment_id')
-            ->join('users', 'assignment_submissions.student_id', '=', 'users.user_id')
+            ->join('students', 'assignment_submissions.student_id', '=', 'students.student_id')
+            ->join('users', 'students.user_id', '=', 'users.user_id')
             ->where('assignments.teacher_id', $teacher->teacher_id)
             ->select(
                 'assignment_submissions.*',
                 'assignments.title as assignment_title',
                 'assignments.total_points',
+                'assignments.due_date',
                 'users.first_name',
-                'users.last_name'
+                'users.last_name',
+                'students.student_number'
             )
             ->orderBy('assignment_submissions.submitted_at', 'desc')
             ->get();
+        
+        // Count submissions by status
+        $pendingCount = $submissions->where('status', 'submitted')->count();
+        $gradedCount = $submissions->where('status', 'graded')->count();
     }
 }
 ?>
@@ -100,11 +109,45 @@ if ($teacher_id) {
         <div class="d-flex justify-content-between align-items-center mb-4">
           <div class="d-flex align-items-center">
             <i class="bi bi-clipboard-check text-primary fs-1 me-3"></i>
-            <h3 class="mb-0 fw-bold">Assignment Management</h3>
+            <div>
+              <h3 class="mb-0 fw-bold">Assignment Management</h3>
+              <p class="text-muted small mb-0">Create assignments and grade student submissions</p>
+            </div>
           </div>
-          <a href="#" class="btn btn-outline-secondary">
+          <a href="<?php echo route('teacher.class-portal'); ?>" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left me-2"></i> Back to Class Portal
           </a>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="row g-3 mb-4">
+          <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+              <div class="card-body text-center">
+                <i class="bi bi-clock-history text-warning" style="font-size: 2.5rem;"></i>
+                <h3 class="mt-2 mb-0 fw-bold"><?php echo $pendingCount ?? 0; ?></h3>
+                <p class="text-muted small mb-0">Pending Grading</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+              <div class="card-body text-center">
+                <i class="bi bi-check-circle text-success" style="font-size: 2.5rem;"></i>
+                <h3 class="mt-2 mb-0 fw-bold"><?php echo $gradedCount ?? 0; ?></h3>
+                <p class="text-muted small mb-0">Graded</p>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card border-0 shadow-sm">
+              <div class="card-body text-center">
+                <i class="bi bi-file-earmark-text text-primary" style="font-size: 2.5rem;"></i>
+                <h3 class="mt-2 mb-0 fw-bold"><?php echo $submissions->count(); ?></h3>
+                <p class="text-muted small mb-0">Total Submissions</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Create Assignment Form -->
@@ -132,9 +175,12 @@ if ($teacher_id) {
 
             <!-- File Upload -->
             <div class="col-md-6">
-              <label for="assignmentFile" class="form-label fw-bold">Attach File</label>
-              <input type="file" id="assignmentFile" class="form-control">
-              <small class="text-muted">Optional: Upload PDF, DOCX, or reference materials.</small>
+              <label for="assignmentFile" class="form-label fw-bold">Attach File (Optional)</label>
+              <input type="file" id="assignmentFile" class="form-control" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.zip,.jpg,.jpeg,.png">
+              <small class="text-muted d-block">Upload PDF, DOCX, PPT, or reference materials (Max 10MB)</small>
+              <small id="fileSelectedInfo" class="text-success fw-bold" style="display: none;">
+                <i class="bi bi-check-circle me-1"></i><span id="fileName"></span>
+              </small>
             </div>
 
           </div>
@@ -190,17 +236,43 @@ if ($teacher_id) {
                     </td>
                     <td><?php echo $grade; ?></td>
                     <td>
-                      <button class="btn btn-sm btn-outline-info" title="View"
-                        onclick="viewRecord(<?php echo $sub->submission_id; ?>, 'Submission', {
-                          'student': '<?php echo addslashes($studentName); ?>',
-                          'assignment': '<?php echo addslashes($sub->assignment_title); ?>'
-                        })">
-                        <i class="bi bi-eye"></i>
+                      <button class="btn btn-sm btn-outline-info" title="View Submission" 
+                        onclick="viewSubmission(<?php echo htmlspecialchars(json_encode([
+                          'submission_id' => $sub->submission_id,
+                          'student_name' => $studentName,
+                          'student_number' => $sub->student_number,
+                          'assignment_title' => $sub->assignment_title,
+                          'submitted_at' => $sub->submitted_at,
+                          'submission_text' => $sub->submission_text,
+                          'file_path' => $sub->file_path,
+                          'score' => $sub->score,
+                          'total_points' => $sub->total_points,
+                          'feedback' => $sub->feedback,
+                          'status' => $sub->status
+                        ])); ?>)">
+                        <i class="bi bi-eye"></i> View
                       </button>
                       <?php if($sub->status === 'submitted'): ?>
-                        <button class="btn btn-sm btn-outline-success" title="Grade"
-                          onclick="gradeAssignment(<?php echo $sub->submission_id; ?>, '<?php echo addslashes($studentName); ?>', '<?php echo addslashes($sub->assignment_title); ?>')">
-                          <i class="bi bi-check2-square"></i>
+                        <button class="btn btn-sm btn-success" title="Grade Submission"
+                          onclick="gradeSubmission(<?php echo htmlspecialchars(json_encode([
+                            'submission_id' => $sub->submission_id,
+                            'student_name' => $studentName,
+                            'assignment_title' => $sub->assignment_title,
+                            'total_points' => $sub->total_points
+                          ])); ?>)">
+                          <i class="bi bi-check2-square"></i> Grade
+                        </button>
+                      <?php else: ?>
+                        <button class="btn btn-sm btn-outline-secondary" title="Edit Grade"
+                          onclick="gradeSubmission(<?php echo htmlspecialchars(json_encode([
+                            'submission_id' => $sub->submission_id,
+                            'student_name' => $studentName,
+                            'assignment_title' => $sub->assignment_title,
+                            'total_points' => $sub->total_points,
+                            'current_score' => $sub->score,
+                            'current_feedback' => $sub->feedback
+                          ])); ?>)">
+                          <i class="bi bi-pencil"></i> Edit
                         </button>
                       <?php endif; ?>
                     </td>
@@ -237,5 +309,181 @@ if ($teacher_id) {
 </body>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+  // Show selected filename
+  document.getElementById('assignmentFile')?.addEventListener('change', function(e) {
+    const fileInfo = document.getElementById('fileSelectedInfo');
+    const fileName = document.getElementById('fileName');
+    
+    if (this.files.length > 0) {
+      fileName.textContent = this.files[0].name;
+      fileInfo.style.display = 'block';
+    } else {
+      fileInfo.style.display = 'none';
+    }
+  });
+
+  // View Submission Details
+  function viewSubmission(data) {
+    const fileLink = data.file_path ? 
+      `<a href="/storage/${data.file_path}" target="_blank" class="btn btn-sm btn-primary">
+        <i class="bi bi-download me-1"></i>Download Submission File
+      </a>` : 
+      '<p class="text-muted">No file attached</p>';
+
+    Swal.fire({
+      title: 'Submission Details',
+      html: `
+        <div class="text-start">
+          <div class="mb-3">
+            <strong>Student:</strong> ${data.student_name}
+            ${data.student_number ? `<span class="text-muted">(${data.student_number})</span>` : ''}
+          </div>
+          <div class="mb-3">
+            <strong>Assignment:</strong> ${data.assignment_title}
+          </div>
+          <div class="mb-3">
+            <strong>Submitted:</strong> ${new Date(data.submitted_at).toLocaleString()}
+          </div>
+          <div class="mb-3">
+            <strong>Status:</strong> <span class="badge bg-${data.status === 'graded' ? 'success' : 'warning'}">${data.status}</span>
+          </div>
+          ${data.score !== null ? `
+            <div class="mb-3">
+              <strong>Grade:</strong> ${data.score}/${data.total_points} (${Math.round((data.score/data.total_points)*100)}%)
+            </div>
+          ` : ''}
+          ${data.submission_text ? `
+            <div class="mb-3">
+              <strong>Submission Text:</strong>
+              <div class="bg-light p-3 rounded mt-2" style="max-height: 200px; overflow-y: auto;">
+                ${data.submission_text}
+              </div>
+            </div>
+          ` : ''}
+          <div class="mb-3">
+            <strong>Attached File:</strong><br>
+            ${fileLink}
+          </div>
+          ${data.feedback ? `
+            <div class="mb-3">
+              <strong>Teacher Feedback:</strong>
+              <div class="bg-light p-3 rounded mt-2">
+                ${data.feedback}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      `,
+      width: 600,
+      showCloseButton: true,
+      confirmButtonText: 'Close'
+    });
+  }
+
+  // Grade Submission
+  function gradeSubmission(data) {
+    Swal.fire({
+      title: 'Grade Submission',
+      html: `
+        <div class="text-start">
+          <p><strong>Student:</strong> ${data.student_name}</p>
+          <p><strong>Assignment:</strong> ${data.assignment_title}</p>
+          
+          <div class="mb-3">
+            <label class="form-label fw-bold">Score <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="number" id="gradeScore" class="form-control" 
+                     min="0" max="${data.total_points}" step="0.01"
+                     value="${data.current_score || ''}" 
+                     placeholder="Enter score" required>
+              <span class="input-group-text">/ ${data.total_points}</span>
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label fw-bold">Feedback/Comments</label>
+            <textarea id="gradeFeedback" class="form-control" rows="4" 
+                      placeholder="Provide feedback to the student...">${data.current_feedback || ''}</textarea>
+          </div>
+        </div>
+      `,
+      width: 600,
+      showCancelButton: true,
+      confirmButtonText: '<i class="bi bi-check-circle me-2"></i>Submit Grade',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#28a745',
+      preConfirm: () => {
+        const score = document.getElementById('gradeScore').value;
+        const feedback = document.getElementById('gradeFeedback').value;
+        
+        if (!score || score < 0 || score > data.total_points) {
+          Swal.showValidationMessage(`Score must be between 0 and ${data.total_points}`);
+          return false;
+        }
+        
+        return {
+          submission_id: data.submission_id,
+          score: parseFloat(score),
+          feedback: feedback
+        };
+      }
+    }).then((result) => {
+      if (result.isConfirmed) {
+        submitGrade(result.value);
+      }
+    });
+  }
+
+  // Submit Grade to Backend
+  function submitGrade(gradeData) {
+    Swal.fire({
+      title: 'Submitting Grade...',
+      text: 'Please wait',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    fetch('/teacher/assignments/grade', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken,
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(gradeData)
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        Swal.fire({
+          icon: 'success',
+          title: 'Grade Submitted!',
+          text: 'The student will be notified of their grade.',
+          showConfirmButton: true
+        }).then(() => {
+          location.reload();
+        });
+      } else {
+        Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: data.message || 'Failed to submit grade'
+        });
+      }
+    })
+    .catch(error => {
+      Swal.fire({
+        icon: 'error',
+        title: 'Error',
+        text: 'Failed to submit grade. Please try again.'
+      });
+      console.error('Error:', error);
+    });
+  }
+</script>
 
 </html>

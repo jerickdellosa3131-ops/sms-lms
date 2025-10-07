@@ -23,7 +23,7 @@ if ($student) {
                  ->where('quiz_attempts.student_id', '=', $student_id);
         })
         ->where('class_enrollments.student_id', $student_id)
-        ->where('quizzes.status', 'active')
+        ->where('quizzes.status', 'published')
         ->select(
             'quizzes.*',
             'classes.section_name',
@@ -37,7 +37,7 @@ if ($student) {
         ->join('quizzes', 'quiz_attempts.quiz_id', '=', 'quizzes.quiz_id')
         ->join('classes', 'quizzes.class_id', '=', 'classes.class_id')
         ->where('quiz_attempts.student_id', $student_id)
-        ->where('quiz_attempts.status', 'completed')
+        ->whereIn('quiz_attempts.status', ['submitted', 'graded'])
         ->select(
             'quiz_attempts.*',
             'quizzes.quiz_title',
@@ -148,7 +148,7 @@ if ($student) {
                   </p>
                   <p class="small text-muted"><?php echo htmlspecialchars($quiz->section_name); ?></p>
                   
-                  <?php if($quiz->attempt_status == 'completed'): ?>
+                  <?php if(in_array($quiz->attempt_status, ['submitted', 'graded'])): ?>
                     <div class="mb-2">
                       <span class="badge bg-success">Completed</span>
                       <?php if($quiz->score): ?>
@@ -243,5 +243,12 @@ if ($student) {
 </body>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+  function startQuiz(quizId, quizTitle) {
+    // Redirect to quiz-taking page
+    window.location.href = `/student/quiz/${quizId}/take`;
+  }
+</script>
 
 </html>

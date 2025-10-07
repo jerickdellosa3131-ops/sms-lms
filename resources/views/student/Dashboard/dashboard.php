@@ -19,11 +19,17 @@ if ($student) {
     // Fetch enrolled classes
     $enrolledClasses = DB::table('class_enrollments')
         ->join('classes', 'class_enrollments.class_id', '=', 'classes.class_id')
-        ->join('users as teachers', 'classes.teacher_id', '=', 'teachers.user_id')
+        ->join('teachers', 'classes.teacher_id', '=', 'teachers.teacher_id')
+        ->join('users as teacher_users', 'teachers.user_id', '=', 'teacher_users.user_id')
         ->leftJoin('subjects', 'classes.subject_id', '=', 'subjects.subject_id')
         ->where('class_enrollments.student_id', $student_id)
         ->where('class_enrollments.status', 'enrolled')
-        ->select('classes.*', 'teachers.first_name as teacher_first', 'teachers.last_name as teacher_last', 'subjects.subject_name')
+        ->select(
+            'classes.*', 
+            'teacher_users.first_name as teacher_first', 
+            'teacher_users.last_name as teacher_last', 
+            'subjects.subject_name'
+        )
         ->get();
 
     // Fetch upcoming assignments
@@ -50,10 +56,39 @@ if ($student) {
         ->limit(5)
         ->select('grades.*', 'classes.section_name', 'classes.class_code')
         ->get();
+        
+    // Fetch unread notifications
+    $unreadNotifications = DB::table('notifications')
+        ->where('user_id', $user_id)
+        ->where('is_read', 0)
+        ->orderBy('created_at', 'desc')
+        ->get();
+        
+    // Fetch recent notifications (last 10)
+    $recentNotifications = DB::table('notifications')
+        ->where('user_id', $user_id)
+        ->orderBy('created_at', 'desc')
+        ->limit(10)
+        ->get();
+        
+    // Fetch lesson materials from enrolled classes
+    $lessonMaterials = DB::table('lesson_materials')
+        ->join('modules', 'lesson_materials.module_id', '=', 'modules.module_id')
+        ->join('classes', 'modules.class_id', '=', 'classes.class_id')
+        ->join('class_enrollments', 'classes.class_id', '=', 'class_enrollments.class_id')
+        ->where('class_enrollments.student_id', $student_id)
+        ->where('class_enrollments.status', 'enrolled')
+        ->orderBy('lesson_materials.created_at', 'desc')
+        ->limit(10)
+        ->select('lesson_materials.*', 'classes.section_name', 'classes.class_code')
+        ->get();
 } else {
     // Default empty collections if not logged in
     $enrolledClasses = collect();
     $recentGrades = collect();
+    $unreadNotifications = collect();
+    $recentNotifications = collect();
+    $lessonMaterials = collect();
 }
 ?>
 <!DOCTYPE html>
@@ -68,6 +103,10 @@ if ($student) {
   <link rel="stylesheet" href="<?php echo asset('style.css'); ?>">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  
+  <!-- SweetAlert2 for Notifications -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <style>
     @import url("../../style.css");
 
@@ -278,18 +317,114 @@ if ($student) {
 
             <div class="col-lg-6">
               <div class="card h-100">
-                <div class="card-header bg-info text-white">
-                  <i class="bi bi-megaphone-fill me-2"></i> Announcements
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                  <span><i class="bi bi-bell-fill me-2"></i> Notifications</span>
+                  <?php if($unreadNotifications->count() > 0): ?>
+                    <span class="badge bg-danger"><?php echo $unreadNotifications->count(); ?> new</span>
+                  <?php endif; ?>
                 </div>
-                <div class="card-body">
-                  <div class="alert alert-info text-center" role="alert">
-                    <i class="bi bi-bell fs-1 d-block mb-2"></i>
-                    No new announcements at this time.
-                  </div>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                  <?php if($recentNotifications->count() > 0): ?>
+                    <ul class="list-group list-group-flush">
+                      <?php foreach($recentNotifications as $notification): ?>
+                      <li class="list-group-item <?php echo $notification->is_read ? '' : 'bg-light border-start border-primary border-3'; ?> px-2">
+                        <div class="d-flex align-items-start">
+                          <i class="bi bi-<?php echo $notification->notification_type == 'lesson_material' ? 'file-earmark-text' : 'bell'; ?>-fill text-primary fs-4 me-3 mt-1"></i>
+                          <div class="flex-grow-1">
+                            <h6 class="mb-1 <?php echo $notification->is_read ? '' : 'fw-bold'; ?>"><?php echo htmlspecialchars($notification->title); ?></h6>
+                            <p class="mb-1 small text-muted"><?php echo htmlspecialchars($notification->message); ?></p>
+                            <small class="text-muted"><i class="bi bi-clock"></i> <?php echo date('M d, Y g:i A', strtotime($notification->created_at)); ?></small>
+                          </div>
+                        </div>
+                      </li>
+                      <?php endforeach; ?>
+                    </ul>
+                  <?php else: ?>
+                    <div class="alert alert-info text-center" role="alert">
+                      <i class="bi bi-bell fs-1 d-block mb-2"></i>
+                      No notifications at this time.
+                    </div>
+                  <?php endif; ?>
                 </div>
               </div>
             </div>
           </div>
+          
+          <!-- Lesson Materials Section -->
+          <div class="row g-4 mt-2">
+            <div class="col-12">
+              <div class="card">
+                <div class="card-header bg-primary text-white">
+                  <i class="bi bi-file-earmark-text-fill me-2"></i> Recent Lesson Materials
+                </div>
+                <div class="card-body">
+                  <?php if($lessonMaterials->count() > 0): ?>
+                    <div class="table-responsive">
+                      <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                          <tr>
+                            <th>Material Title</th>
+                            <th>Class</th>
+                            <th>Type</th>
+                            <th>Date Uploaded</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <?php foreach($lessonMaterials as $material): ?>
+                          <tr>
+                            <td>
+                              <i class="bi bi-<?php 
+                                echo match($material->material_type) {
+                                  'pdf' => 'file-pdf',
+                                  'doc' => 'file-word',
+                                  'video' => 'camera-video',
+                                  'link' => 'link-45deg',
+                                  'image' => 'image',
+                                  default => 'file-earmark'
+                                }; 
+                              ?>-fill text-primary me-2"></i>
+                              <strong><?php echo htmlspecialchars($material->material_title); ?></strong>
+                              <?php if($material->material_description): ?>
+                                <br><small class="text-muted"><?php echo htmlspecialchars(substr($material->material_description, 0, 60)); ?>...</small>
+                              <?php endif; ?>
+                            </td>
+                            <td>
+                              <span class="badge bg-info"><?php echo htmlspecialchars($material->section_name ?? $material->class_code); ?></span>
+                            </td>
+                            <td>
+                              <span class="badge bg-secondary"><?php echo strtoupper($material->material_type); ?></span>
+                            </td>
+                            <td><?php echo date('M d, Y', strtotime($material->created_at)); ?></td>
+                            <td>
+                              <?php if($material->material_type === 'link' && $material->external_link): ?>
+                                <a href="<?php echo htmlspecialchars($material->external_link); ?>" target="_blank" class="btn btn-sm btn-primary">
+                                  <i class="bi bi-box-arrow-up-right"></i> Open
+                                </a>
+                              <?php elseif($material->file_path): ?>
+                                <a href="<?php echo asset('storage/' . $material->file_path); ?>" target="_blank" class="btn btn-sm btn-success" download>
+                                  <i class="bi bi-download"></i> Download
+                                </a>
+                              <?php else: ?>
+                                <span class="text-muted small">No file</span>
+                              <?php endif; ?>
+                            </td>
+                          </tr>
+                          <?php endforeach; ?>
+                        </tbody>
+                      </table>
+                    </div>
+                  <?php else: ?>
+                    <div class="alert alert-info text-center" role="alert">
+                      <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                      No lesson materials available yet.
+                    </div>
+                  <?php endif; ?>
+                </div>
+              </div>
+            </div>
+          </div>
+          
         </div>
       </div>
     </div>
@@ -306,5 +441,68 @@ if ($student) {
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <script>
+    // Show notification popup on page load if there are unread notifications
+    document.addEventListener('DOMContentLoaded', function() {
+      <?php if($unreadNotifications->count() > 0): ?>
+        const unreadNotifications = <?php echo json_encode($unreadNotifications->toArray()); ?>;
+        
+        // Show popup with unread notifications
+        let notificationHTML = '<div class="text-start" style="max-height: 400px; overflow-y: auto;">';
+        
+        unreadNotifications.forEach(notification => {
+          const icon = notification.notification_type === 'lesson_material' ? 'file-earmark-text' : 'bell';
+          const date = new Date(notification.created_at).toLocaleString();
+          
+          notificationHTML += `
+            <div class="alert alert-info mb-2">
+              <div class="d-flex align-items-start">
+                <i class="bi bi-${icon}-fill fs-4 me-3"></i>
+                <div>
+                  <h6 class="fw-bold mb-1">${notification.title}</h6>
+                  <p class="mb-1 small">${notification.message}</p>
+                  <small class="text-muted"><i class="bi bi-clock"></i> ${date}</small>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+        
+        notificationHTML += '</div>';
+        
+        Swal.fire({
+          title: '<i class="bi bi-bell-fill text-primary me-2"></i>New Notifications',
+          html: notificationHTML,
+          icon: 'info',
+          confirmButtonText: 'Got it!',
+          width: '600px',
+          customClass: {
+            popup: 'notification-popup'
+          }
+        }).then((result) => {
+          if (result.isConfirmed) {
+            // Mark all notifications as read
+            fetch('/student/notifications/mark-read', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json'
+              }
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.success) {
+                // Reload page to update notification badge
+                location.reload();
+              }
+            })
+            .catch(error => console.error('Error marking notifications as read:', error));
+          }
+        });
+      <?php endif; ?>
+    });
+  </script>
 </body>
 </html>

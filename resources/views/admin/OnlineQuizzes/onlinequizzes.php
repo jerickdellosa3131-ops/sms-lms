@@ -5,11 +5,11 @@ use Illuminate\Support\Facades\DB;
 // Get authenticated user
 $user = Auth::user();
 
-// Fetch quizzes with attempt statistics (handle missing quiz_submissions table)
+// Fetch quizzes with attempt statistics from quiz_attempts table
 try {
     $quizzes = DB::table('quizzes')
         ->join('classes', 'quizzes.class_id', '=', 'classes.class_id')
-        ->leftJoin(DB::raw('(SELECT quiz_id, COUNT(*) as attempts, AVG(score) as avg_score FROM quiz_submissions GROUP BY quiz_id) as stats'), 
+        ->leftJoin(DB::raw('(SELECT quiz_id, COUNT(*) as attempts, AVG(score) as avg_score FROM quiz_attempts WHERE status IN ("submitted", "graded") GROUP BY quiz_id) as stats'), 
             'quizzes.quiz_id', '=', 'stats.quiz_id')
         ->select(
             'quizzes.*',
@@ -21,7 +21,7 @@ try {
         ->orderBy('quizzes.created_at', 'desc')
         ->get();
 } catch (\Exception $e) {
-    // If quiz_submissions table doesn't exist, fetch without stats
+    // If quiz_attempts table doesn't exist, fetch without stats
     $quizzes = DB::table('quizzes')
         ->join('classes', 'quizzes.class_id', '=', 'classes.class_id')
         ->select(
@@ -168,7 +168,7 @@ $avgScore = $quizzes->where('total_attempts', '>', 0)->avg('average_score') ?? 0
                         <span class="text-muted">No attempts</span>
                       <?php endif; ?>
                     </td>
-                    <td><?php echo isset($quiz->deadline) && $quiz->deadline ? date('M d, Y', strtotime($quiz->deadline)) : 'No deadline'; ?></td>
+                    <td><?php echo isset($quiz->end_date) && $quiz->end_date ? date('M d, Y', strtotime($quiz->end_date)) : 'No deadline'; ?></td>
                     <td>
                       <button class="btn btn-sm btn-outline-info me-1" title="View" 
                         onclick="viewRecord(<?php echo $quiz->quiz_id; ?>, 'Quiz', {
@@ -177,14 +177,15 @@ $avgScore = $quizzes->where('total_attempts', '>', 0)->avg('average_score') ?? 0
                           'Created': '<?php echo date('M d, Y', strtotime($quiz->created_at)); ?>',
                           'Attempts': '<?php echo $quiz->total_attempts; ?>',
                           'Average Score': '<?php echo round($quiz->average_score, 1); ?>%',
-                          'Deadline': '<?php echo isset($quiz->deadline) && $quiz->deadline ? date('M d, Y', strtotime($quiz->deadline)) : 'No deadline'; ?>'
+                          'Start Date': '<?php echo isset($quiz->start_date) && $quiz->start_date ? date('M d, Y', strtotime($quiz->start_date)) : 'Not set'; ?>',
+                          'End Date': '<?php echo isset($quiz->end_date) && $quiz->end_date ? date('M d, Y', strtotime($quiz->end_date)) : 'No deadline'; ?>'
                         })">
                         <i class="bi bi-eye"></i>
                       </button>
                       <button class="btn btn-sm btn-outline-warning me-1" title="Edit"
                         onclick="editRecord(<?php echo $quiz->quiz_id; ?>, 'Quiz', {
                           'title': '<?php echo addslashes($quiz->quiz_title ?? $quiz->title ?? ''); ?>',
-                          'deadline': '<?php echo $quiz->deadline ?? ''; ?>'
+                          'end_date': '<?php echo $quiz->end_date ?? ''; ?>'
                         })">
                         <i class="bi bi-pencil"></i>
                       </button>

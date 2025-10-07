@@ -17,14 +17,15 @@ if ($student) {
     // Fetch enrolled classes with teacher and subject info
     $classes = DB::table('class_enrollments')
         ->join('classes', 'class_enrollments.class_id', '=', 'classes.class_id')
-        ->join('users as teachers', 'classes.teacher_id', '=', 'teachers.user_id')
+        ->join('teachers', 'classes.teacher_id', '=', 'teachers.teacher_id')
+        ->join('users as teacher_users', 'teachers.user_id', '=', 'teacher_users.user_id')
         ->leftJoin('subjects', 'classes.subject_id', '=', 'subjects.subject_id')
         ->where('class_enrollments.student_id', $student_id)
         ->where('class_enrollments.status', 'enrolled')
         ->select(
             'classes.*',
-            'teachers.first_name as teacher_first',
-            'teachers.last_name as teacher_last',
+            'teacher_users.first_name as teacher_first',
+            'teacher_users.last_name as teacher_last',
             'subjects.subject_name',
             'class_enrollments.final_grade'
         )
@@ -257,7 +258,7 @@ if ($student) {
                                 $colorIndex++;
                             ?>
                             <div class="col-md-6 col-lg-4">
-                                <div class="subject-card <?php echo $cardClass; ?>">
+                                <a href="<?php echo route('student.class-materials', ['class_id' => $class->class_id]); ?>" class="subject-card <?php echo $cardClass; ?>" style="cursor: pointer;">
                                     <i class="bi bi-three-dots card-menu-icon"></i>
                                     <div>
                                         <h5 class="title"><?php echo htmlspecialchars($class->section_name); ?></h5>
@@ -277,7 +278,7 @@ if ($student) {
                                         <span class="badge bg-success">Grade: <?php echo $class->final_grade; ?>%</span>
                                     </div>
                                     <?php endif; ?>
-                                </div>
+                                </a>
                             </div>
                             <?php endforeach; ?>
                         <?php else: ?>

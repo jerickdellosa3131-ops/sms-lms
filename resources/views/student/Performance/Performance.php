@@ -341,9 +341,9 @@ if ($student_id) {
                                     <div class="icon-wrapper">
                                         <i class="bi bi-chat-quote-fill"></i>
                                     </div>
-                                    <h5 class="fw-bold">Feedback & Comments</h5>
-                                    <p class="mb-4">Read important feedback from professors and interact with your peers.</p>
-                                    <a href="<?php echo route('student.class-portal'); ?>" class="btn mt-auto">View Feedback</a>
+                                    <h5 class="fw-bold">Give Feedback</h5>
+                                    <p class="mb-4">Share your thoughts and suggestions about your classes and learning experience.</p>
+                                    <a href="<?php echo route('student.feedback'); ?>" class="btn mt-auto">Submit Feedback</a>
                                 </div>
                             </div>
                         </div>

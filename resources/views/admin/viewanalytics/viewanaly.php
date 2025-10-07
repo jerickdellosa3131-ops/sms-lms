@@ -11,8 +11,9 @@ $totalMaterials = DB::table('lesson_materials')->count();
 
 // Try to get average quiz score, handle if table doesn't exist
 try {
-    $averageQuizScore = DB::table('quiz_submissions')
-        ->where('status', 'graded')
+    $averageQuizScore = DB::table('quiz_attempts')
+        ->whereIn('status', ['submitted', 'graded'])
+        ->whereNotNull('score')
         ->avg('score') ?? 0;
 } catch (\Exception $e) {
     $averageQuizScore = 0;
@@ -24,7 +25,8 @@ $assignmentSubmissionRate = $totalAssignments > 0 ? round(($submittedAssignments
 
 // Recent activity
 $recentSubmissions = DB::table('assignment_submissions')
-    ->join('users', 'assignment_submissions.student_id', '=', 'users.user_id')
+    ->join('students', 'assignment_submissions.student_id', '=', 'students.student_id')
+    ->join('users', 'students.user_id', '=', 'users.user_id')
     ->join('assignments', 'assignment_submissions.assignment_id', '=', 'assignments.assignment_id')
     ->select(
         'users.first_name',

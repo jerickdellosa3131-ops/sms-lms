@@ -7,11 +7,12 @@ $user = Auth::user();
 
 // Fetch lesson materials with teacher information
 $materials = DB::table('lesson_materials')
-    ->join('users as teachers', 'lesson_materials.teacher_id', '=', 'teachers.user_id')
+    ->leftJoin('teachers', 'lesson_materials.teacher_id', '=', 'teachers.teacher_id')
+    ->leftJoin('users', 'teachers.user_id', '=', 'users.user_id')
     ->select(
         'lesson_materials.*',
-        'teachers.first_name as teacher_first',
-        'teachers.last_name as teacher_last'
+        'users.first_name as teacher_first',
+        'users.last_name as teacher_last'
     )
     ->orderBy('lesson_materials.created_at', 'desc')
     ->get();

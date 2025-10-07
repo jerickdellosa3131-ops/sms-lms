@@ -440,22 +440,33 @@ Route::prefix('teacher')->middleware(['auth'])->name('teacher.')->group(function
         return view('teacher.Dashboard.dashboard');
     })->name('dashboard');
     
-    // Create Quiz (AJAX)
+    // Create Quiz with Questions (AJAX)
     Route::post('/quizzes/store', function (Request $request) {
         if (!Auth::user()->isTeacher()) abort(403);
         
         try {
+            DB::beginTransaction();
+            
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
                 'duration' => 'nullable|integer',
                 'total_points' => 'nullable|integer',
-                'deadline' => 'nullable|date'
+                'deadline' => 'nullable|date',
+                'description' => 'nullable|string',
+                'instructions' => 'nullable|string',
+                'questions' => 'nullable|array',
+                'questions.*.question_text' => 'required|string',
+                'questions.*.question_type' => 'required|string',
+                'questions.*.points' => 'required|integer',
+                'questions.*.options' => 'nullable|array',
+                'questions.*.correct_answer' => 'nullable|string'
             ]);
             
             // Get teacher_id from teachers table
             $teacher = DB::table('teachers')->where('user_id', Auth::id())->first();
             
             if (!$teacher) {
+                DB::rollBack();
                 return response()->json([
                     'success' => false,
                     'message' => 'Teacher record not found'
@@ -468,14 +479,18 @@ Route::prefix('teacher')->middleware(['auth'])->name('teacher.')->group(function
                 ->first();
             
             if (!$teacherClass) {
+                DB::rollBack();
                 return response()->json([
                     'success' => false,
                     'message' => 'No class found for this teacher'
                 ], 400);
             }
             
+            // Create quiz
             $quizId = DB::table('quizzes')->insertGetId([
                 'quiz_title' => $request->title,
+                'quiz_description' => $request->description,
+                'instructions' => $request->instructions,
                 'class_id' => $teacherClass->class_id,
                 'teacher_id' => $teacher->teacher_id,
                 'time_limit' => $request->duration ?? 30,
@@ -486,12 +501,64 @@ Route::prefix('teacher')->middleware(['auth'])->name('teacher.')->group(function
                 'updated_at' => now()
             ]);
             
+            // Create questions if provided
+            if ($request->has('questions') && is_array($request->questions)) {
+                foreach ($request->questions as $questionData) {
+                    $questionId = DB::table('quiz_questions')->insertGetId([
+                        'quiz_id' => $quizId,
+                        'question_type' => $questionData['question_type'],
+                        'question_text' => $questionData['question_text'],
+                        'points' => $questionData['points'],
+                        'correct_answer' => $questionData['correct_answer'] ?? null,
+                        'created_at' => now()
+                    ]);
+                    
+                    // Create options for multiple choice questions
+                    if ($questionData['question_type'] === 'multiple_choice' && isset($questionData['options'])) {
+                        foreach ($questionData['options'] as $index => $optionText) {
+                            $isCorrect = isset($questionData['correct_answer']) && $questionData['correct_answer'] == $index;
+                            DB::table('quiz_question_options')->insert([
+                                'question_id' => $questionId,
+                                'option_text' => $optionText,
+                                'is_correct' => $isCorrect ? 1 : 0
+                            ]);
+                        }
+                    }
+                }
+            }
+            
+            // Send notifications to enrolled students
+            $enrolledStudents = DB::table('class_enrollments')
+                ->join('students', 'class_enrollments.student_id', '=', 'students.student_id')
+                ->where('class_enrollments.class_id', $teacherClass->class_id)
+                ->where('class_enrollments.status', 'enrolled')
+                ->select('students.user_id')
+                ->get();
+            
+            $teacherName = Auth::user()->first_name . ' ' . Auth::user()->last_name;
+            foreach ($enrolledStudents as $student) {
+                DB::table('notifications')->insert([
+                    'user_id' => $student->user_id,
+                    'notification_type' => 'quiz',
+                    'title' => 'New Quiz Available',
+                    'message' => $teacherName . ' posted a new quiz: ' . $request->title . ' (' . ($request->total_points ?? 100) . ' points)',
+                    'reference_type' => 'quiz',
+                    'reference_id' => $quizId,
+                    'is_read' => 0,
+                    'created_at' => now()
+                ]);
+            }
+            
+            DB::commit();
+            
             return response()->json([
                 'success' => true,
-                'message' => 'Quiz created successfully',
-                'quiz_id' => $quizId
+                'message' => 'Quiz created successfully with ' . count($request->questions ?? []) . ' questions',
+                'quiz_id' => $quizId,
+                'questions_count' => count($request->questions ?? [])
             ]);
         } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create quiz: ' . $e->getMessage()
@@ -507,8 +574,12 @@ Route::prefix('teacher')->middleware(['auth'])->name('teacher.')->group(function
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
                 'description' => 'nullable|string',
+                'instructions' => 'nullable|string',
                 'due_date' => 'required|date',
-                'max_points' => 'nullable|integer'
+                'max_points' => 'nullable|integer',
+                'file' => 'nullable|file|max:10240', // 10MB max
+                'late_submission_allowed' => 'nullable|boolean',
+                'late_penalty_percentage' => 'nullable|numeric|min:0|max:100'
             ]);
             
             // Get teacher_id from teachers table
@@ -532,13 +603,25 @@ Route::prefix('teacher')->middleware(['auth'])->name('teacher.')->group(function
                 ], 400);
             }
             
+            // Handle file upload
+            $filePath = null;
+            if ($request->hasFile('file')) {
+                $file = $request->file('file');
+                $fileName = time() . '_' . $file->getClientOriginalName();
+                $filePath = $file->storeAs('assignments', $fileName, 'public');
+            }
+            
             $assignmentId = DB::table('assignments')->insertGetId([
                 'title' => $request->title,
                 'class_id' => $teacherClass->class_id,
                 'teacher_id' => $teacher->teacher_id,
                 'description' => $request->description,
+                'instructions' => $request->instructions,
                 'due_date' => $request->due_date,
                 'total_points' => $request->max_points ?? 100,
+                'file_attachment' => $filePath,
+                'late_submission_allowed' => $request->late_submission_allowed ?? 1,
+                'late_penalty_percentage' => $request->late_penalty_percentage ?? 0,
                 'status' => 'published',
                 'created_at' => now(),
                 'updated_at' => now()
@@ -547,7 +630,8 @@ Route::prefix('teacher')->middleware(['auth'])->name('teacher.')->group(function
             return response()->json([
                 'success' => true,
                 'message' => 'Assignment created successfully',
-                'assignment_id' => $assignmentId
+                'assignment_id' => $assignmentId,
+                'file_uploaded' => $filePath ? true : false
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -556,6 +640,74 @@ Route::prefix('teacher')->middleware(['auth'])->name('teacher.')->group(function
             ], 500);
         }
     })->name('assignments.store');
+    
+    // Grade Assignment Submission
+    Route::post('/assignments/grade', function (Request $request) {
+        if (!Auth::user()->isTeacher()) abort(403);
+        
+        try {
+            $validated = $request->validate([
+                'submission_id' => 'required|integer',
+                'score' => 'required|numeric|min:0',
+                'feedback' => 'nullable|string'
+            ]);
+            
+            // Update the submission with grade and feedback
+            DB::table('assignment_submissions')
+                ->where('submission_id', $request->submission_id)
+                ->update([
+                    'score' => $request->score,
+                    'feedback' => $request->feedback,
+                    'status' => 'graded',
+                    'graded_at' => now()
+                ]);
+            
+            // Get submission details for notification
+            $submission = DB::table('assignment_submissions')
+                ->join('assignments', 'assignment_submissions.assignment_id', '=', 'assignments.assignment_id')
+                ->join('students', 'assignment_submissions.student_id', '=', 'students.student_id')
+                ->where('assignment_submissions.submission_id', $request->submission_id)
+                ->select(
+                    'students.user_id',
+                    'assignments.title as assignment_title',
+                    'assignments.total_points'
+                )
+                ->first();
+            
+            if ($submission) {
+                // Send notification to student
+                $teacherName = Auth::user()->first_name . ' ' . Auth::user()->last_name;
+                $percentage = round(($request->score / $submission->total_points) * 100, 1);
+                
+                DB::table('notifications')->insert([
+                    'user_id' => $submission->user_id,
+                    'notification_type' => 'assignment_graded',
+                    'title' => 'Assignment Graded',
+                    'message' => $teacherName . ' graded your assignment "' . $submission->assignment_title . '". Score: ' . $request->score . '/' . $submission->total_points . ' (' . $percentage . '%)',
+                    'reference_type' => 'assignment',
+                    'reference_id' => $request->submission_id,
+                    'is_read' => 0,
+                    'created_at' => now()
+                ]);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Grade submitted successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to submit grade: ' . $e->getMessage()
+            ], 500);
+        }
+    })->name('assignments.grade');
+    
+    // View Assignment Submissions
+    Route::get('/assignments/submissions', function () {
+        if (!Auth::user()->isTeacher()) abort(403);
+        return view('teacher.AssignmentSubmission.assignsubmission');
+    })->name('assignments.submissions');
     
     // Class Portal
     Route::get('/class-portal', function () {
@@ -633,6 +785,8 @@ Route::prefix('teacher')->middleware(['auth'])->name('teacher.')->group(function
                 'file' => 'nullable|file|max:10240' // 10MB max
             ]);
             
+            DB::beginTransaction();
+            
             $filePath = null;
             if ($request->hasFile('file')) {
                 $file = $request->file('file');
@@ -662,12 +816,39 @@ Route::prefix('teacher')->middleware(['auth'])->name('teacher.')->group(function
                 'updated_at' => now()
             ]);
             
+            // Get all students enrolled in this class
+            $enrolledStudents = DB::table('class_enrollments')
+                ->join('students', 'class_enrollments.student_id', '=', 'students.student_id')
+                ->where('class_enrollments.class_id', $teacherClass->class_id)
+                ->where('class_enrollments.status', 'enrolled')
+                ->select('students.user_id')
+                ->get();
+            
+            // Create notifications for all enrolled students
+            $teacherName = Auth::user()->first_name . ' ' . Auth::user()->last_name;
+            foreach ($enrolledStudents as $student) {
+                DB::table('notifications')->insert([
+                    'user_id' => $student->user_id,
+                    'notification_type' => 'lesson_material',
+                    'title' => 'New Lesson Material Uploaded',
+                    'message' => $teacherName . ' uploaded a new ' . $request->material_type . ' material: ' . $request->title,
+                    'reference_type' => 'lesson_material',
+                    'reference_id' => $materialId,
+                    'is_read' => 0,
+                    'created_at' => now()
+                ]);
+            }
+            
+            DB::commit();
+            
             return response()->json([
                 'success' => true,
-                'message' => 'Material uploaded successfully',
-                'material_id' => $materialId
+                'message' => 'Material uploaded successfully and students notified',
+                'material_id' => $materialId,
+                'students_notified' => $enrolledStudents->count()
             ]);
         } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to upload material: ' . $e->getMessage()
@@ -937,17 +1118,136 @@ Route::prefix('student')->middleware(['auth'])->name('student.')->group(function
         return view('student.Dashboard.dashboard');
     })->name('dashboard');
     
+    // Mark Notifications as Read
+    Route::post('/notifications/mark-read', function (Request $request) {
+        if (!Auth::user()->isStudent()) abort(403);
+        
+        try {
+            DB::table('notifications')
+                ->where('user_id', Auth::id())
+                ->where('is_read', 0)
+                ->update([
+                    'is_read' => 1,
+                    'read_at' => now()
+                ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Notifications marked as read'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to mark notifications as read'
+            ], 500);
+        }
+    })->name('notifications.mark-read');
+    
     // Class Portal
     Route::get('/class-portal', function () {
         if (!Auth::user()->isStudent()) abort(403);
         return view('student.ClassPortal.classportal');
     })->name('class-portal');
     
+    // Class Materials - View specific class materials
+    Route::get('/class/{class_id}/materials', function ($class_id) {
+        if (!Auth::user()->isStudent()) abort(403);
+        
+        // Verify student is enrolled in this class
+        $student = DB::table('students')->where('user_id', Auth::id())->first();
+        if (!$student) abort(403);
+        
+        $enrollment = DB::table('class_enrollments')
+            ->where('student_id', $student->student_id)
+            ->where('class_id', $class_id)
+            ->where('status', 'enrolled')
+            ->first();
+            
+        if (!$enrollment) abort(403, 'You are not enrolled in this class');
+        
+        return view('student.ClassPortal.class-materials');
+    })->name('class-materials');
+    
     // Performance
     Route::get('/performance', function () {
         if (!Auth::user()->isStudent()) abort(403);
         return view('student.Performance.Performance');
     })->name('performance');
+    
+    // Feedback
+    Route::get('/feedback', function () {
+        if (!Auth::user()->isStudent()) abort(403);
+        return view('student.Feedback.feedback');
+    })->name('feedback');
+    
+    // Submit Feedback
+    Route::post('/feedback/submit', function (Request $request) {
+        if (!Auth::user()->isStudent()) abort(403);
+        
+        try {
+            $validated = $request->validate([
+                'class_id' => 'required|integer',
+                'feedback_type' => 'required|string',
+                'rating' => 'nullable|integer|min:0|max:5',
+                'comment' => 'required|string',
+                'is_anonymous' => 'required|boolean'
+            ]);
+            
+            $student = DB::table('students')->where('user_id', Auth::id())->first();
+            
+            if (!$student) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Student record not found'
+                ], 400);
+            }
+            
+            // Check if student_feedback table exists, create if not
+            $tableExists = DB::select("SHOW TABLES LIKE 'student_feedback'");
+            
+            if (empty($tableExists)) {
+                // Create the table
+                DB::statement("
+                    CREATE TABLE `student_feedback` (
+                      `feedback_id` int NOT NULL AUTO_INCREMENT,
+                      `student_id` int NOT NULL,
+                      `class_id` int NOT NULL,
+                      `feedback_type` enum('general','teaching','content','facilities','suggestion') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'general',
+                      `rating` int DEFAULT NULL,
+                      `comment` text COLLATE utf8mb4_unicode_ci NOT NULL,
+                      `is_anonymous` tinyint(1) DEFAULT '0',
+                      `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+                      PRIMARY KEY (`feedback_id`),
+                      KEY `student_id` (`student_id`),
+                      KEY `class_id` (`class_id`),
+                      CONSTRAINT `student_feedback_ibfk_1` FOREIGN KEY (`student_id`) REFERENCES `students` (`student_id`) ON DELETE CASCADE,
+                      CONSTRAINT `student_feedback_ibfk_2` FOREIGN KEY (`class_id`) REFERENCES `classes` (`class_id`) ON DELETE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ");
+            }
+            
+            // Insert feedback into database
+            DB::table('student_feedback')->insert([
+                'student_id' => $student->student_id,
+                'class_id' => $request->class_id,
+                'feedback_type' => $request->feedback_type,
+                'rating' => $request->rating > 0 ? $request->rating : null,
+                'comment' => $request->comment,
+                'is_anonymous' => $request->is_anonymous ? 1 : 0,
+                'created_at' => now()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Feedback submitted successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to submit feedback: ' . $e->getMessage()
+            ], 500);
+        }
+    })->name('feedback.submit');
     
     // Grades
     Route::get('/grades', function () {
@@ -961,11 +1261,281 @@ Route::prefix('student')->middleware(['auth'])->name('student.')->group(function
         return view('student.Assignmentsubmission.assignsubmission');
     })->name('assignments');
     
+    // Submit Assignment
+    Route::post('/assignments/submit', function (Request $request) {
+        if (!Auth::user()->isStudent()) abort(403);
+        
+        try {
+            $validated = $request->validate([
+                'assignment_id' => 'required|integer',
+                'submission_text' => 'nullable|string',
+                'file' => 'nullable|file|max:10240' // 10MB max
+            ]);
+            
+            $student = DB::table('students')->where('user_id', Auth::id())->first();
+            if (!$student) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Student record not found'
+                ], 400);
+            }
+            
+            // Check if already submitted
+            $existing = DB::table('assignment_submissions')
+                ->where('assignment_id', $request->assignment_id)
+                ->where('student_id', $student->student_id)
+                ->first();
+            
+            if ($existing) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You have already submitted this assignment'
+                ], 400);
+            }
+            
+            // Handle file upload
+            $filePath = null;
+            if ($request->hasFile('file')) {
+                $file = $request->file('file');
+                $filePath = $file->store('assignments/submissions', 'public');
+            }
+            
+            // Insert submission
+            DB::table('assignment_submissions')->insert([
+                'assignment_id' => $request->assignment_id,
+                'student_id' => $student->student_id,
+                'submission_text' => $request->submission_text,
+                'file_path' => $filePath,
+                'status' => 'submitted',
+                'submitted_at' => now()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Assignment submitted successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to submit assignment: ' . $e->getMessage()
+            ], 500);
+        }
+    })->name('assignments.submit');
+    
+    // View My Submission
+    Route::get('/assignments/{assignment_id}/submission', function ($assignment_id) {
+        if (!Auth::user()->isStudent()) abort(403);
+        
+        try {
+            $student = DB::table('students')->where('user_id', Auth::id())->first();
+            if (!$student) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Student record not found'
+                ], 400);
+            }
+            
+            $submission = DB::table('assignment_submissions')
+                ->join('assignments', 'assignment_submissions.assignment_id', '=', 'assignments.assignment_id')
+                ->where('assignment_submissions.assignment_id', $assignment_id)
+                ->where('assignment_submissions.student_id', $student->student_id)
+                ->select(
+                    'assignment_submissions.*',
+                    'assignments.total_points'
+                )
+                ->first();
+            
+            if (!$submission) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Submission not found'
+                ], 404);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'submission' => $submission
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load submission: ' . $e->getMessage()
+            ], 500);
+        }
+    })->name('assignments.view-submission');
+    
     // Quizzes
     Route::get('/quizzes', function () {
         if (!Auth::user()->isStudent()) abort(403);
         return view('student.OnlineQuizzes.onlinequizzes');
     })->name('quizzes');
+    
+    // Take Quiz
+    Route::get('/quiz/{quiz_id}/take', function ($quiz_id) {
+        if (!Auth::user()->isStudent()) abort(403);
+        return view('student.OnlineQuizzes.take-quiz');
+    })->name('quiz.take');
+    
+    // Download Assignment File
+    Route::get('/assignment/{assignment_id}/download', function ($assignment_id) {
+        if (!Auth::user()->isStudent()) abort(403);
+        
+        $student = DB::table('students')->where('user_id', Auth::id())->first();
+        if (!$student) abort(403);
+        
+        // Get assignment
+        $assignment = DB::table('assignments')
+            ->join('classes', 'assignments.class_id', '=', 'classes.class_id')
+            ->join('class_enrollments', 'classes.class_id', '=', 'class_enrollments.class_id')
+            ->where('assignments.assignment_id', $assignment_id)
+            ->where('class_enrollments.student_id', $student->student_id)
+            ->where('class_enrollments.status', 'enrolled')
+            ->select('assignments.*')
+            ->first();
+        
+        if (!$assignment || !$assignment->file_attachment) {
+            abort(404, 'File not found');
+        }
+        
+        $filePath = storage_path('app/public/' . $assignment->file_attachment);
+        
+        if (!file_exists($filePath)) {
+            abort(404, 'File not found on server');
+        }
+        
+        return response()->download($filePath, basename($assignment->file_attachment));
+    })->name('assignment.download');
+    
+    // Submit Quiz
+    Route::post('/quiz/submit', function (Request $request) {
+        if (!Auth::user()->isStudent()) abort(403);
+        
+        try {
+            DB::beginTransaction();
+            
+            $quiz_id = $request->input('quiz_id');
+            $student = DB::table('students')->where('user_id', Auth::id())->first();
+            
+            if (!$student) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Student record not found'
+                ], 400);
+            }
+            
+            // Get quiz details
+            $quiz = DB::table('quizzes')->where('quiz_id', $quiz_id)->first();
+            if (!$quiz) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Quiz not found'
+                ], 404);
+            }
+            
+            // Create quiz attempt
+            $attemptId = DB::table('quiz_attempts')->insertGetId([
+                'quiz_id' => $quiz_id,
+                'student_id' => $student->student_id,
+                'attempt_number' => 1,
+                'start_time' => $request->input('start_time'),
+                'end_time' => now(),
+                'time_spent' => $request->input('time_spent', 0),
+                'status' => 'submitted',
+                'created_at' => now()
+            ]);
+            
+            // Get all questions
+            $questions = DB::table('quiz_questions')
+                ->where('quiz_id', $quiz_id)
+                ->get();
+            
+            $totalScore = 0;
+            $totalPoints = 0;
+            
+            // Process each question
+            foreach ($questions as $question) {
+                $totalPoints += $question->points;
+                $answerKey = 'question_' . $question->question_id;
+                $studentAnswer = $request->input($answerKey);
+                
+                $isCorrect = 0;
+                $pointsEarned = 0;
+                
+                if ($question->question_type === 'multiple_choice') {
+                    // Check if selected option is correct
+                    $selectedOption = DB::table('quiz_question_options')
+                        ->where('option_id', $studentAnswer)
+                        ->first();
+                    
+                    if ($selectedOption && $selectedOption->is_correct) {
+                        $isCorrect = 1;
+                        $pointsEarned = $question->points;
+                    }
+                    
+                    // Save answer
+                    DB::table('quiz_answers')->insert([
+                        'attempt_id' => $attemptId,
+                        'question_id' => $question->question_id,
+                        'selected_option_id' => $studentAnswer,
+                        'is_correct' => $isCorrect,
+                        'points_earned' => $pointsEarned
+                    ]);
+                } elseif ($question->question_type === 'true_false') {
+                    // Check if answer matches correct answer
+                    if (strtolower($studentAnswer) === strtolower($question->correct_answer)) {
+                        $isCorrect = 1;
+                        $pointsEarned = $question->points;
+                    }
+                    
+                    DB::table('quiz_answers')->insert([
+                        'attempt_id' => $attemptId,
+                        'question_id' => $question->question_id,
+                        'answer_text' => $studentAnswer,
+                        'is_correct' => $isCorrect,
+                        'points_earned' => $pointsEarned
+                    ]);
+                } elseif ($question->question_type === 'short_answer') {
+                    // For short answer, save but don't auto-grade
+                    DB::table('quiz_answers')->insert([
+                        'attempt_id' => $attemptId,
+                        'question_id' => $question->question_id,
+                        'answer_text' => $studentAnswer,
+                        'is_correct' => null,
+                        'points_earned' => null
+                    ]);
+                }
+                
+                $totalScore += $pointsEarned;
+            }
+            
+            // Update attempt with score
+            DB::table('quiz_attempts')
+                ->where('attempt_id', $attemptId)
+                ->update([
+                    'score' => $totalScore,
+                    'status' => 'graded'
+                ]);
+            
+            DB::commit();
+            
+            $percentage = $totalPoints > 0 ? round(($totalScore / $totalPoints) * 100, 2) : 0;
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Quiz submitted successfully',
+                'score' => $totalScore,
+                'total_points' => $totalPoints,
+                'percentage' => $percentage
+            ]);
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to submit quiz: ' . $e->getMessage()
+            ], 500);
+        }
+    })->name('quiz.submit');
     
     // My Profile
     Route::get('/profile', function () {

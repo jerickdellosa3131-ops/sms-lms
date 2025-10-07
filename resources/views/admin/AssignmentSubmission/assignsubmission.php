@@ -8,14 +8,17 @@ $user = Auth::user();
 // Fetch assignment submissions with student and assignment details
 $submissions = DB::table('assignment_submissions')
     ->join('assignments', 'assignment_submissions.assignment_id', '=', 'assignments.assignment_id')
-    ->join('users', 'assignment_submissions.student_id', '=', 'users.user_id')
+    ->join('students', 'assignment_submissions.student_id', '=', 'students.student_id')
+    ->join('users', 'students.user_id', '=', 'users.user_id')
     ->join('classes', 'assignments.class_id', '=', 'classes.class_id')
     ->select(
         'assignment_submissions.*',
         'assignments.title as assignment_title',
         'assignments.due_date',
+        'assignments.total_points',
         'users.first_name',
         'users.last_name',
+        'students.student_number',
         'classes.section_name',
         'classes.class_code'
     )

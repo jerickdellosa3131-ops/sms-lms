@@ -335,6 +335,7 @@ function handleCreateAssignment() {
   const title = document.getElementById('assignmentTitle')?.value;
   const deadline = document.getElementById('deadline')?.value;
   const description = document.getElementById('assignmentDesc')?.value;
+  const fileInput = document.getElementById('assignmentFile');
 
   if (!title || !deadline) {
     if (typeof Swal !== 'undefined') {
@@ -361,20 +362,26 @@ function handleCreateAssignment() {
   // Get CSRF token
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 
+  // Use FormData for file upload
+  const formData = new FormData();
+  formData.append('title', title);
+  formData.append('description', description || '');
+  formData.append('due_date', deadline);
+  formData.append('max_points', 100);
+  
+  // Add file if selected
+  if (fileInput && fileInput.files.length > 0) {
+    formData.append('file', fileInput.files[0]);
+  }
+
   // Send AJAX request
-  fetch('/teacher/assignments', {
+  fetch('/teacher/assignments/store', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
       'X-CSRF-TOKEN': csrfToken,
       'Accept': 'application/json'
     },
-    body: JSON.stringify({
-      title,
-      description,
-      due_date: deadline,
-      max_points: 100
-    })
+    body: formData
   })
   .then(response => response.json())
   .then(data => {

@@ -7,12 +7,13 @@ $user = Auth::user();
 
 // Fetch all classes with teacher and subject information
 $classes = DB::table('classes')
-    ->join('users as teachers', 'classes.teacher_id', '=', 'teachers.user_id')
+    ->leftJoin('teachers', 'classes.teacher_id', '=', 'teachers.teacher_id')
+    ->leftJoin('users as teachers_users', 'teachers.user_id', '=', 'teachers_users.user_id')
     ->leftJoin('subjects', 'classes.subject_id', '=', 'subjects.subject_id')
     ->select(
         'classes.*',
-        'teachers.first_name as teacher_first',
-        'teachers.last_name as teacher_last',
+        'teachers_users.first_name as teacher_first',
+        'teachers_users.last_name as teacher_last',
         'subjects.subject_name',
         DB::raw('(SELECT COUNT(*) FROM class_enrollments WHERE class_enrollments.class_id = classes.class_id AND class_enrollments.status = "enrolled") as enrolled_count')
     )
