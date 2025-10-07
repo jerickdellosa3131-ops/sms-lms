@@ -135,14 +135,16 @@ Route::prefix('admin')->middleware(['auth'])->name('admin.')->group(function () 
             if ($request->user_type === 'student') {
                 DB::table('students')->insert([
                     'user_id' => $userId,
-                    'student_number' => $request->user_number ?? 'STU' . str_pad($userId, 6, '0', STR_PAD_LEFT),
+                    'student_number' => $request->user_number ?? 'S' . date('Y') . str_pad($userId, 3, '0', STR_PAD_LEFT),
+                    'enrollment_year' => date('Y'),
+                    'current_year_level' => '1',
                     'created_at' => now(),
                     'updated_at' => now()
                 ]);
             } elseif ($request->user_type === 'teacher') {
                 DB::table('teachers')->insert([
                     'user_id' => $userId,
-                    'teacher_number' => $request->user_number ?? 'TCH' . str_pad($userId, 6, '0', STR_PAD_LEFT),
+                    'employee_number' => $request->user_number ?? 'T' . date('Y') . str_pad($userId, 3, '0', STR_PAD_LEFT),
                     'created_at' => now(),
                     'updated_at' => now()
                 ]);
